@@ -24,7 +24,7 @@ export async function GET(
   }
 
   // 토큰으로 여행 조회
-  const serviceSupabase = await createServiceClient()
+  const serviceSupabase = createServiceClient()
   const { data: trip } = await serviceSupabase
     .from('trips')
     .select('id')
