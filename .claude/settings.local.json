@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Read(//c/knulps/private/**)",
+      "Bash(npx create-next-app@latest trip --typescript --tailwind --app --no-src-dir --no-import-alias --eslint)"
+    ]
+  }
+}
