@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound, redirect } from 'next/navigation'
-import { APIProvider } from '@vis.gl/react-google-maps'
 import TripView from './TripView'
 
 export default async function TripPage({
@@ -38,8 +37,6 @@ export default async function TripPage({
   }))
 
   return (
-    <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
-      <TripView trip={trip} days={sortedDays} userId={user.id} />
-    </APIProvider>
+    <TripView trip={trip} days={sortedDays} userId={user.id} />
   )
 }

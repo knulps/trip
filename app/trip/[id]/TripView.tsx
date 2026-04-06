@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect, useCallback } from 'react'
-import { Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps'
+import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps'
 import type { Trip, Day, Place } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import PlaceList from './PlaceList'
@@ -18,6 +18,7 @@ interface Props {
 export default function TripView({ trip, days: initialDays, userId }: Props) {
   const [days, setDays] = useState(initialDays)
   const [selectedDayId, setSelectedDayId] = useState(initialDays[0]?.id ?? null)
+  const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
 
   const selectedDay = days.find(d => d.id === selectedDayId) ?? days[0]
   const places = selectedDay?.places ?? []
@@ -28,14 +29,14 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
     [places]
   )
 
-  // 지도 중심: 장소가 있으면 첫 번째 장소, 없으면 서울
-  const mapCenter = useMemo(
+  // 지도 초기 중심: 장소가 있으면 첫 번째 장소, 없으면 파리
+  const mapDefaultCenter = useMemo(
     () =>
       places[0]
         ? { lat: places[0].lat, lng: places[0].lng }
         : { lat: 48.8566, lng: 2.3522 }, // 파리 (유럽 여행)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [selectedDayId]
+    []
   )
 
   // Supabase Realtime — places 변경 실시간 반영
@@ -86,6 +87,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
   }, [supabase, trip.id])
 
   return (
+    <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
     <div className="flex flex-col h-full">
       {/* 헤더 */}
       <header className="flex items-center gap-3 px-4 pt-10 pb-3">
@@ -123,20 +125,33 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
       {/* 지도 — 45dvh */}
       <div style={{ height: '45dvh' }}>
         <Map
-          defaultCenter={mapCenter}
-          center={mapCenter}
+          defaultCenter={mapDefaultCenter}
           defaultZoom={13}
           mapId="trip-map"
           disableDefaultUI
           gestureHandling="greedy"
         >
-          {places.map((place, i) => (
-            <AdvancedMarker key={place.id} position={{ lat: place.lat, lng: place.lng }}>
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white shadow">
-                {i + 1}
-              </div>
-            </AdvancedMarker>
-          ))}
+          <MapController
+            selectedDayId={selectedDayId}
+            places={places}
+            focusedPlaceId={focusedPlaceId}
+          />
+          {places.map((place, i) => {
+            const isFocused = place.id === focusedPlaceId
+            return (
+              <AdvancedMarker key={place.id} position={{ lat: place.lat, lng: place.lng }}>
+                <div
+                  className={`flex items-center justify-center rounded-full font-bold text-white shadow transition-all ${
+                    isFocused
+                      ? 'h-8 w-8 bg-blue-600 text-xs'
+                      : 'h-6 w-6 bg-gray-900 text-[10px]'
+                  }`}
+                >
+                  {i + 1}
+                </div>
+              </AdvancedMarker>
+            )
+          })}
           {polylinePath.length >= 2 && (
             <Polyline path={polylinePath} />
           )}
@@ -149,9 +164,13 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
           dayId={selectedDayId}
           places={places}
           onRefresh={refreshDays}
+          onPlaceClick={(place) => {
+            setFocusedPlaceId(place.id)
+          }}
         />
       </div>
     </div>
+    </APIProvider>
   )
 }
 
@@ -207,6 +226,36 @@ function AddDayButton({ tripId, onAdded }: { tripId: string; onAdded: () => void
       + 날짜
     </button>
   )
+}
+
+// MapController: 날짜 변경 시 첫 번째 장소로 이동, 장소 클릭 시 해당 장소로 이동
+function MapController({
+  selectedDayId,
+  places,
+  focusedPlaceId,
+}: {
+  selectedDayId: string | null
+  places: Place[]
+  focusedPlaceId: string | null
+}) {
+  const map = useMap()
+
+  // 선택된 날이 바뀌면 첫 번째 장소로 pan
+  useEffect(() => {
+    if (!map || places.length === 0) return
+    map.panTo({ lat: places[0].lat, lng: places[0].lng })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDayId, map])
+
+  // 장소 클릭 시 해당 장소로 pan
+  useEffect(() => {
+    if (!map || !focusedPlaceId) return
+    const place = places.find(p => p.id === focusedPlaceId)
+    if (place) map.panTo({ lat: place.lat, lng: place.lng })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedPlaceId, map])
+
+  return null
 }
 
 // Polyline 컴포넌트 (Google Maps API 직접 사용)

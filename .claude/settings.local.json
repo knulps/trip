@@ -7,7 +7,8 @@
       "Bash(mkdir -p /c/knulps/private/trip/app/trip/[id])",
       "Bash(mkdir -p /c/knulps/private/trip/app/invite/[token])",
       "Bash(npx tsc:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

@@ -10,9 +10,10 @@ interface Props {
   dayId: string | null
   places: Place[]
   onRefresh: () => void
+  onPlaceClick?: (place: Place) => void
 }
 
-export default function PlaceList({ dayId, places, onRefresh }: Props) {
+export default function PlaceList({ dayId, places, onRefresh, onPlaceClick }: Props) {
   const supabase = createClient()
 
   async function deletePlace(id: string) {
@@ -49,13 +50,20 @@ export default function PlaceList({ dayId, places, onRefresh }: Props) {
       ) : (
         <ol className="flex flex-col divide-y divide-gray-50 px-4">
           {places.map((place, i) => (
-            <li key={place.id} className="flex items-center gap-3 py-3">
+            <li
+              key={place.id}
+              className="flex items-center gap-3 py-3 cursor-pointer"
+              onClick={() => onPlaceClick?.(place)}
+            >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white">
                 {i + 1}
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{place.name}</p>
-                <p className="text-xs text-gray-400 truncate">{place.address}</p>
+                <p className="text-xs text-gray-400 truncate">
+                  {place.visit_time && <span className="mr-1">{place.visit_time.slice(0, 5)}</span>}
+                  {place.address}
+                </p>
               </div>
               <button
                 onClick={() => deletePlace(place.id)}

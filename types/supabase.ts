@@ -96,6 +96,7 @@ export type Database = {
           lat: number
           lng: number
           address: string
+          visit_time: string | null
           created_at: string
         }
         Insert: {
@@ -106,6 +107,7 @@ export type Database = {
           lat: number
           lng: number
           address: string
+          visit_time?: string | null
           created_at?: string
         }
         Update: {
@@ -114,6 +116,7 @@ export type Database = {
           lat?: number
           lng?: number
           address?: string
+          visit_time?: string | null
         }
         Relationships: [
           {

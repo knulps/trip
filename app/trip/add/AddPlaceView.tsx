@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useMapsLibrary } from '@vis.gl/react-google-maps'
+import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { generateKeyBetween } from 'fractional-indexing'
@@ -13,13 +13,14 @@ interface PlaceResult {
   lng: number
 }
 
-export default function AddPlaceView() {
+function AddPlaceViewInner() {
   const searchParams = useSearchParams()
   const dayId = searchParams.get('dayId')
   const router = useRouter()
   const supabase = createClient()
 
   const [selected, setSelected] = useState<PlaceResult | null>(null)
+  const [visitTime, setVisitTime] = useState('')
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const placesLib = useMapsLibrary('places')
@@ -66,10 +67,14 @@ export default function AddPlaceView() {
       lat: selected.lat,
       lng: selected.lng,
       address: selected.address,
+      visit_time: visitTime || null,
     })
 
     setSaving(false)
-    if (!error) router.back()
+    if (!error) {
+      router.refresh()
+      router.back()
+    }
   }
 
   return (
@@ -101,6 +106,16 @@ export default function AddPlaceView() {
           </div>
         )}
 
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500">방문 시간 (선택)</label>
+          <input
+            type="time"
+            value={visitTime}
+            onChange={(e) => setVisitTime(e.target.value)}
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors"
+          />
+        </div>
+
         <button
           onClick={savePlace}
           disabled={!selected || saving}
@@ -110,5 +125,13 @@ export default function AddPlaceView() {
         </button>
       </div>
     </main>
+  )
+}
+
+export default function AddPlaceView() {
+  return (
+    <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
+      <AddPlaceViewInner />
+    </APIProvider>
   )
 }
