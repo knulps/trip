@@ -1,0 +1,114 @@
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import { useMapsLibrary } from '@vis.gl/react-google-maps'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { generateKeyBetween } from 'fractional-indexing'
+
+interface PlaceResult {
+  name: string
+  address: string
+  lat: number
+  lng: number
+}
+
+export default function AddPlaceView() {
+  const searchParams = useSearchParams()
+  const dayId = searchParams.get('dayId')
+  const router = useRouter()
+  const supabase = createClient()
+
+  const [selected, setSelected] = useState<PlaceResult | null>(null)
+  const [saving, setSaving] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const placesLib = useMapsLibrary('places')
+
+  useEffect(() => {
+    if (!placesLib || !inputRef.current) return
+
+    const autocomplete = new placesLib.Autocomplete(inputRef.current, {
+      fields: ['name', 'formatted_address', 'geometry'],
+    })
+
+    autocomplete.addListener('place_changed', () => {
+      const place = autocomplete.getPlace()
+      if (!place.geometry?.location) return
+
+      setSelected({
+        name: place.name ?? '',
+        address: place.formatted_address ?? '',
+        lat: place.geometry.location.lat(),
+        lng: place.geometry.location.lng(),
+      })
+    })
+  }, [placesLib])
+
+  async function savePlace() {
+    if (!selected || !dayId) return
+    setSaving(true)
+
+    // 현재 마지막 order_key 조회
+    const { data: lastPlaces } = await supabase
+      .from('places')
+      .select('order_key')
+      .eq('day_id', dayId)
+      .order('order_key', { ascending: false })
+      .limit(1)
+
+    const lastKey = lastPlaces?.[0]?.order_key ?? null
+    const newKey = generateKeyBetween(lastKey, null)
+
+    const { error } = await supabase.from('places').insert({
+      day_id: dayId,
+      order_key: newKey,
+      name: selected.name,
+      lat: selected.lat,
+      lng: selected.lng,
+      address: selected.address,
+    })
+
+    setSaving(false)
+    if (!error) router.back()
+  }
+
+  return (
+    <main className="flex flex-col h-full">
+      <header className="flex items-center gap-3 px-4 pt-10 pb-4">
+        <button onClick={() => router.back()} className="text-gray-400 text-lg">
+          ‹
+        </button>
+        <h1 className="text-base font-semibold">장소 추가</h1>
+      </header>
+
+      <div className="flex flex-col gap-4 px-4">
+        <div className="relative">
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="장소 검색 (예: 에펠탑, 루브르 박물관)"
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors"
+          />
+        </div>
+
+        {selected && (
+          <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+            <p className="font-medium text-sm">{selected.name}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{selected.address}</p>
+            <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+              <span>{selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}</span>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={savePlace}
+          disabled={!selected || saving}
+          className="w-full rounded-xl bg-gray-900 py-3 text-sm font-medium text-white disabled:opacity-40 transition-opacity"
+        >
+          {saving ? '저장 중...' : '일정에 추가'}
+        </button>
+      </div>
+    </main>
+  )
+}
