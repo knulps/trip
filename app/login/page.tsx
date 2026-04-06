@@ -18,11 +18,11 @@ export default function LoginPage() {
     <main className="flex h-full flex-col items-center justify-center gap-6 px-6">
       <div className="text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Trip</h1>
-        <p className="mt-2 text-sm text-gray-500">지인들과 함께 만드는 여행 일정</p>
+        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">지인들과 함께 만드는 여행 일정</p>
       </div>
       <button
         onClick={signInWithGoogle}
-        className="flex w-full max-w-xs items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium shadow-sm transition hover:bg-gray-50 active:scale-95"
+        className="flex w-full max-w-xs items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-medium shadow-sm transition hover:bg-gray-50 active:scale-95 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:shadow-gray-900"
       >
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
           <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>

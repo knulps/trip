@@ -80,7 +80,7 @@ function AddPlaceViewInner() {
   return (
     <main className="flex flex-col h-full">
       <header className="flex items-center gap-3 px-4 pt-10 pb-4">
-        <button onClick={() => router.back()} className="text-gray-400 text-lg">
+        <button onClick={() => router.back()} className="text-gray-400 dark:text-gray-500 text-lg">
           ‹
         </button>
         <h1 className="text-base font-semibold">장소 추가</h1>
@@ -92,27 +92,27 @@ function AddPlaceViewInner() {
             ref={inputRef}
             type="text"
             placeholder="장소 검색 (예: 에펠탑, 루브르 박물관)"
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors"
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-gray-500 dark:focus:bg-gray-800"
           />
         </div>
 
         {selected && (
-          <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+          <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:shadow-gray-900">
             <p className="font-medium text-sm">{selected.name}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{selected.address}</p>
-            <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{selected.address}</p>
+            <div className="mt-3 flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
               <span>{selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}</span>
             </div>
           </div>
         )}
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-500">방문 시간 (선택)</label>
+          <label className="text-xs text-gray-500 dark:text-gray-400">방문 시간 (선택)</label>
           <input
             type="time"
             value={visitTime}
             onChange={(e) => setVisitTime(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors"
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-gray-500 dark:focus:bg-gray-800"
           />
         </div>
 

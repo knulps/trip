@@ -49,7 +49,7 @@ export default async function HomePage() {
               <li key={trip.id}>
                 <Link
                   href={`/trip/${trip.id}`}
-                  className="flex flex-col gap-1 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-transform active:scale-95"
+                  className="flex flex-col gap-1 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-transform active:scale-95 dark:border-gray-800 dark:bg-gray-950 dark:shadow-gray-900"
                 >
                   <span className="font-medium">{trip.name}</span>
                   <span className="text-xs text-gray-400">

@@ -32,7 +32,7 @@ export default function PlaceList({ dayId, places, onRefresh, onPlaceClick }: Pr
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between px-4 py-3">
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
           {places.length}개 장소
         </span>
         <Link
@@ -48,7 +48,7 @@ export default function PlaceList({ dayId, places, onRefresh, onPlaceClick }: Pr
           <p className="text-sm text-gray-400">아직 장소가 없어요</p>
         </div>
       ) : (
-        <ol className="flex flex-col divide-y divide-gray-50 px-4">
+        <ol className="flex flex-col divide-y divide-gray-50 px-4 dark:divide-gray-800">
           {places.map((place, i) => (
             <li
               key={place.id}
@@ -60,14 +60,14 @@ export default function PlaceList({ dayId, places, onRefresh, onPlaceClick }: Pr
               </span>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{place.name}</p>
-                <p className="text-xs text-gray-400 truncate">
+                <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
                   {place.visit_time && <span className="mr-1">{place.visit_time.slice(0, 5)}</span>}
                   {place.address}
                 </p>
               </div>
               <button
                 onClick={() => deletePlace(place.id)}
-                className="shrink-0 text-gray-300 transition-colors hover:text-red-400 active:text-red-600"
+                className="shrink-0 text-gray-300 transition-colors hover:text-red-400 active:text-red-600 dark:text-gray-600 dark:hover:text-red-400"
                 aria-label="장소 삭제"
               >
                 ✕

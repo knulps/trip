@@ -91,12 +91,12 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
     <div className="flex flex-col h-full">
       {/* 헤더 */}
       <header className="flex items-center gap-3 px-4 pt-10 pb-3">
-        <Link href="/" className="text-gray-400">
+        <Link href="/" className="text-gray-400 dark:text-gray-500">
           ‹
         </Link>
         <div className="flex-1 min-w-0">
           <h1 className="text-base font-semibold truncate">{trip.name}</h1>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 dark:text-gray-500">
             {trip.start_date} – {trip.end_date}
           </p>
         </div>
@@ -113,7 +113,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
             className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
               day.id === selectedDayId
                 ? 'bg-gray-900 text-white'
-                : 'bg-gray-100 text-gray-600'
+                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
             }`}
           >
             Day {i + 1}
@@ -123,7 +123,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
       </div>
 
       {/* 지도 — 45dvh */}
-      <div style={{ height: '45dvh' }}>
+      <div style={{ height: '45dvh' }} className="dark:bg-gray-900">
         <Map
           defaultCenter={mapDefaultCenter}
           defaultZoom={13}
@@ -188,7 +188,7 @@ function InviteButton({ tripId, inviteToken }: { tripId: string; inviteToken: st
   return (
     <button
       onClick={copyLink}
-      className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-gray-50"
+      className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
     >
       {copied ? '복사됨 ✓' : '초대'}
     </button>
@@ -221,7 +221,7 @@ function AddDayButton({ tripId, onAdded }: { tripId: string; onAdded: () => void
   return (
     <button
       onClick={addDay}
-      className="shrink-0 rounded-full bg-gray-100 px-3.5 py-1.5 text-xs font-medium text-gray-500"
+      className="shrink-0 rounded-full bg-gray-100 px-3.5 py-1.5 text-xs font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400"
     >
       + 날짜
     </button>
