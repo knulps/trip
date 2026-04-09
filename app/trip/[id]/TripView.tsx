@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps'
 import type { Trip, Day, Place } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
@@ -15,10 +15,13 @@ interface Props {
   userId: string
 }
 
-export default function TripView({ trip, days: initialDays, userId }: Props) {
+export default function TripView({ trip, days: initialDays, userId: _userId }: Props) {
   const [days, setDays] = useState(initialDays)
   const [selectedDayId, setSelectedDayId] = useState(initialDays[0]?.id ?? null)
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
+
+  const scrollCooldown = useRef(false)
+  const lastScrollTop = useRef(0)
 
   const selectedDay = days.find(d => d.id === selectedDayId) ?? days[0]
   const places = selectedDay?.places ?? []
@@ -39,7 +42,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
     []
   )
 
-  // Supabase Realtime — places 변경 실시간 반영
+  // Supabase Realtime — places / days 변경 실시간 반영
   const supabase = createClient()
 
   useEffect(() => {
@@ -55,7 +58,17 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
           table: 'places',
         },
         () => {
-          // 변경 발생 시 최신 데이터 재조회
+          refreshDays()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'days',
+        },
+        () => {
           refreshDays()
         }
       )
@@ -86,6 +99,62 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
     }
   }, [supabase, trip.id])
 
+  async function deleteDay(dayId: string) {
+    const day = days.find(d => d.id === dayId)
+    if (!day) return
+
+    if (day.places.length > 0) {
+      const confirmed = window.confirm(
+        `이 날의 장소 ${day.places.length}개도 함께 삭제됩니다. 계속할까요?`
+      )
+      if (!confirmed) return
+    }
+
+    // 장소 먼저 삭제 (CASCADE 보장 안됨)
+    await supabase.from('places').delete().eq('day_id', dayId)
+    await supabase.from('days').delete().eq('id', dayId)
+
+    // 인접 날짜로 포커스 이동
+    const currentIndex = days.findIndex(d => d.id === dayId)
+    const nextDays = days.filter(d => d.id !== dayId)
+    if (nextDays.length > 0) {
+      const newIndex = Math.max(0, currentIndex - 1)
+      setSelectedDayId(nextDays[newIndex]?.id ?? nextDays[0].id)
+    }
+
+    refreshDays()
+  }
+
+  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget
+    const { scrollTop, scrollHeight, clientHeight } = el
+    const canScroll = scrollHeight > clientHeight + 2
+    if (!canScroll) return
+    if (scrollCooldown.current) return
+
+    const direction = scrollTop > lastScrollTop.current ? 'down' : 'up'
+    lastScrollTop.current = scrollTop
+
+    const atTop = scrollTop === 0
+    const atBottom = scrollTop + clientHeight >= scrollHeight - 2
+
+    if (atTop && direction === 'up') {
+      const currentIndex = days.findIndex(d => d.id === selectedDayId)
+      if (currentIndex > 0) {
+        setSelectedDayId(days[currentIndex - 1].id)
+        scrollCooldown.current = true
+        setTimeout(() => { scrollCooldown.current = false }, 300)
+      }
+    } else if (atBottom && direction === 'down') {
+      const currentIndex = days.findIndex(d => d.id === selectedDayId)
+      if (currentIndex < days.length - 1) {
+        setSelectedDayId(days[currentIndex + 1].id)
+        scrollCooldown.current = true
+        setTimeout(() => { scrollCooldown.current = false }, 300)
+      }
+    }
+  }
+
   return (
     <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
     <div className="flex flex-col h-full">
@@ -106,19 +175,39 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
 
       {/* 날짜 탭 */}
       <div className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-hide">
-        {days.map((day, i) => (
-          <button
-            key={day.id}
-            onClick={() => setSelectedDayId(day.id)}
-            className={`shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
-              day.id === selectedDayId
-                ? 'bg-gray-900 text-white'
-                : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
-            }`}
-          >
-            Day {i + 1}
-          </button>
-        ))}
+        {days.map((day, i) => {
+          const date = new Date(day.date + 'T00:00:00')
+          const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
+          const dateLabel = `${date.getMonth() + 1}/${date.getDate()} ${dayOfWeek}`
+          const isOnly = days.length === 1
+
+          return (
+            <div key={day.id} className="relative shrink-0">
+              <button
+                onClick={() => setSelectedDayId(day.id)}
+                className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                  day.id === selectedDayId
+                    ? 'bg-gray-900 text-white'
+                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                }`}
+              >
+                <span className="flex flex-col items-center leading-tight">
+                  <span>Day {i + 1}</span>
+                  <span className="text-[10px] opacity-60">{dateLabel}</span>
+                </span>
+              </button>
+              {!isOnly && (
+                <button
+                  aria-label="날짜 삭제"
+                  onClick={() => deleteDay(day.id)}
+                  className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-400 text-[9px] text-white hover:bg-red-400 dark:bg-gray-600 dark:hover:bg-red-500"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )
+        })}
         <AddDayButton tripId={trip.id} onAdded={refreshDays} />
       </div>
 
@@ -159,12 +248,12 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
       </div>
 
       {/* 장소 리스트 — 55dvh */}
-      <div style={{ height: '55dvh' }} className="overflow-y-auto">
+      <div style={{ height: '55dvh' }} className="overflow-y-auto" onScroll={handleScroll}>
         <PlaceList
           dayId={selectedDayId}
           places={places}
           onRefresh={refreshDays}
-          onPlaceClick={(place) => {
+          onFocusPlace={(place) => {
             setFocusedPlaceId(place.id)
           }}
         />
@@ -175,7 +264,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
 }
 
 // 초대 링크 복사 버튼
-function InviteButton({ tripId, inviteToken }: { tripId: string; inviteToken: string }) {
+function InviteButton({ tripId: _tripId, inviteToken }: { tripId: string; inviteToken: string }) {
   const [copied, setCopied] = useState(false)
 
   async function copyLink() {
