@@ -20,10 +20,8 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   const [selectedDayId, setSelectedDayId] = useState(initialDays[0]?.id ?? null)
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
 
-  const scrollCooldown = useRef(false)
-  const lastScrollTop = useRef(0)
-  const scrollAccumulator = useRef(0)
-  const SCROLL_THRESHOLD = 50
+  const dayRefs = useRef<globalThis.Map<string, HTMLDivElement>>(new globalThis.Map())
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const selectedDay = days.find(d => d.id === selectedDayId) ?? days[0]
   const places = selectedDay?.places ?? []
@@ -127,45 +125,55 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     refreshDays()
   }
 
-  function handleScroll(e: React.UIEvent<HTMLDivElement>) {
-    const el = e.currentTarget
-    const { scrollTop, scrollHeight, clientHeight } = el
-    const canScroll = scrollHeight > clientHeight + 2
-    if (!canScroll) return
-    if (scrollCooldown.current) return
-
-    const delta = scrollTop - lastScrollTop.current
-    lastScrollTop.current = scrollTop
-
-    const atTop = scrollTop <= 0
-    const atBottom = scrollTop + clientHeight >= scrollHeight - 2
-
-    if (atTop && delta < 0) {
-      scrollAccumulator.current += Math.abs(delta)
-      if (scrollAccumulator.current >= SCROLL_THRESHOLD) {
-        const currentIndex = days.findIndex(d => d.id === selectedDayId)
-        if (currentIndex > 0) {
-          setSelectedDayId(days[currentIndex - 1].id)
-          scrollCooldown.current = true
-          scrollAccumulator.current = 0
-          setTimeout(() => { scrollCooldown.current = false }, 500)
-        }
-      }
-    } else if (atBottom && delta > 0) {
-      scrollAccumulator.current += Math.abs(delta)
-      if (scrollAccumulator.current >= SCROLL_THRESHOLD) {
-        const currentIndex = days.findIndex(d => d.id === selectedDayId)
-        if (currentIndex < days.length - 1) {
-          setSelectedDayId(days[currentIndex + 1].id)
-          scrollCooldown.current = true
-          scrollAccumulator.current = 0
-          setTimeout(() => { scrollCooldown.current = false }, 500)
-        }
-      }
-    } else {
-      scrollAccumulator.current = 0
+  // Scroll to day section when tab is clicked
+  function scrollToDay(dayId: string) {
+    const el = dayRefs.current.get(dayId)
+    if (el && scrollContainerRef.current) {
+      const container = scrollContainerRef.current
+      const containerTop = container.getBoundingClientRect().top
+      const elTop = el.getBoundingClientRect().top
+      container.scrollTo({
+        top: container.scrollTop + (elTop - containerTop),
+        behavior: 'smooth',
+      })
     }
+    setSelectedDayId(dayId)
   }
+
+  // Update selectedDayId based on scroll position via IntersectionObserver
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container || days.length === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Find the most visible day section
+        let bestEntry: IntersectionObserverEntry | null = null
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            if (!bestEntry || entry.intersectionRatio > bestEntry.intersectionRatio) {
+              bestEntry = entry
+            }
+          }
+        }
+        if (bestEntry) {
+          const dayId = bestEntry.target.getAttribute('data-day-id')
+          if (dayId) setSelectedDayId(dayId)
+        }
+      },
+      { root: container, threshold: [0.1, 0.3, 0.5, 0.7] }
+    )
+
+    // Observe all day sections after a small delay so refs are populated
+    const timer = setTimeout(() => {
+      dayRefs.current.forEach((el) => observer.observe(el))
+    }, 100)
+
+    return () => {
+      clearTimeout(timer)
+      observer.disconnect()
+    }
+  }, [days])
 
   return (
     <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
@@ -196,7 +204,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           return (
             <div key={day.id} className="relative shrink-0">
               <button
-                onClick={() => setSelectedDayId(day.id)}
+                onClick={() => scrollToDay(day.id)}
                 className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
                   day.id === selectedDayId
                     ? 'bg-gray-900 text-white'
@@ -261,15 +269,15 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
         </Map>
       </div>
 
-      {/* 장소 리스트 — 55dvh */}
-      <div style={{ height: '55dvh' }} className="overflow-y-auto" onScroll={handleScroll}>
+      {/* 장소 리스트 — 55dvh, all days in continuous scroll */}
+      <div ref={scrollContainerRef} style={{ height: '55dvh' }} className="overflow-y-auto">
         <PlaceList
-          dayId={selectedDayId}
-          places={places}
+          days={days}
           onRefresh={refreshDays}
           onFocusPlace={(place) => {
             setFocusedPlaceId(place.id)
           }}
+          dayRefs={dayRefs}
         />
       </div>
     </div>
