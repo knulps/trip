@@ -20,6 +20,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   const [selectedDayId, setSelectedDayId] = useState(initialDays[0]?.id ?? null)
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
+  const [mapCollapsed, setMapCollapsed] = useState(false)
 
   const dayRefs = useRef<globalThis.Map<string, HTMLDivElement>>(new globalThis.Map())
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -170,7 +171,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
     <div className="flex flex-col h-full">
       {/* 헤더 */}
-      <header className="flex items-center gap-3 px-4 pb-3" style={{ paddingTop: 'max(2.5rem, env(safe-area-inset-top))' }}>
+      <header className="flex items-center gap-3 px-4 pb-2" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
         <Link href="/" className="text-gray-400 dark:text-gray-500">
           ‹
         </Link>
@@ -185,7 +186,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
       </header>
 
       {/* 날짜 탭 + 편집 토글 */}
-      <div className="flex items-center gap-2 px-4 pb-3">
+      <div className="flex items-center gap-2 px-4 pb-2">
         <button
           onClick={() => setEditMode(v => !v)}
           className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -196,84 +197,92 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
         >
           {editMode ? '완료' : '편집'}
         </button>
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-        {days.map((day, i) => {
-          const date = new Date(day.date + 'T00:00:00')
-          const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
-          const dateLabel = `${date.getMonth() + 1}/${date.getDate()} ${dayOfWeek}`
-          const isOnly = days.length === 1
+        <div className={`flex gap-2 overflow-x-auto scrollbar-hide ${editMode ? 'pt-2' : ''}`}>
+          {days.map((day, i) => {
+            const date = new Date(day.date + 'T00:00:00')
+            const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
+            const dateLabel = `${date.getMonth() + 1}/${date.getDate()} ${dayOfWeek}`
+            const isOnly = days.length === 1
 
-          return (
-            <div key={day.id} className="relative shrink-0">
-              <button
-                onClick={() => scrollToDay(day.id)}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                  day.id === selectedDayId
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
-                }`}
-              >
-                <span className="flex flex-col items-center leading-tight">
-                  <span>Day {i + 1}</span>
-                  <span className="text-[10px] opacity-60">{dateLabel}</span>
-                </span>
-              </button>
-              {!isOnly && (
+            return (
+              <div key={day.id} className="relative shrink-0">
                 <button
-                  aria-label="날짜 삭제"
-                  onClick={() => deleteDay(day.id)}
-                  className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center"
+                  onClick={() => scrollToDay(day.id)}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                    day.id === selectedDayId
+                      ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                  }`}
                 >
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-400 text-[9px] text-white hover:bg-red-400 dark:bg-gray-600 dark:hover:bg-red-500">
-                    ✕
+                  <span className="flex flex-col items-center leading-tight">
+                    <span>Day {i + 1}</span>
+                    <span className="text-[10px] opacity-60">{dateLabel}</span>
                   </span>
                 </button>
-              )}
-            </div>
-          )
-        })}
-        <AddDayButton tripId={trip.id} onAdded={refreshDays} />
+                {editMode && !isOnly && (
+                  <button
+                    aria-label="날짜 삭제"
+                    onClick={() => deleteDay(day.id)}
+                    className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-[9px] text-white active:bg-red-700"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            )
+          })}
+          <AddDayButton tripId={trip.id} onAdded={refreshDays} />
         </div>
       </div>
 
-      {/* 지도 — 45dvh */}
-      <div style={{ height: '45dvh' }} className="dark:bg-gray-900">
-        <Map
-          defaultCenter={mapDefaultCenter}
-          defaultZoom={13}
-          mapId="trip-map"
-          disableDefaultUI
-          gestureHandling="greedy"
-        >
-          <MapController
-            selectedDayId={selectedDayId}
-            places={places}
-            focusedPlaceId={focusedPlaceId}
-          />
-          {places.map((place, i) => {
-            const isFocused = place.id === focusedPlaceId
-            return (
-              <AdvancedMarker key={place.id} position={{ lat: place.lat, lng: place.lng }}>
-                <div
-                  className={`flex items-center justify-center rounded-full font-bold text-white shadow transition-all ${
-                    isFocused
-                      ? 'h-8 w-8 bg-blue-600 text-xs'
-                      : 'h-6 w-6 bg-gray-900 text-[10px]'
-                  }`}
-                >
-                  {i + 1}
-                </div>
-              </AdvancedMarker>
-            )
-          })}
-          {polylinePath.length >= 2 && (
-            <Polyline path={polylinePath} />
-          )}
-        </Map>
-      </div>
+      {/* 지도 접기/펼치기 토글 */}
+      <button
+        onClick={() => setMapCollapsed(v => !v)}
+        className="flex items-center justify-center w-full py-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+      >
+        {mapCollapsed ? '▼ 지도 펼치기' : '▲ 지도 접기'}
+      </button>
 
-      {/* 장소 리스트 — 55dvh, all days in continuous scroll */}
-      <div ref={scrollContainerRef} style={{ height: '55dvh' }} className="overflow-y-auto">
+      {/* 지도 */}
+      {!mapCollapsed && (
+        <div style={{ height: '35dvh' }} className="dark:bg-gray-900">
+          <Map
+            defaultCenter={mapDefaultCenter}
+            defaultZoom={13}
+            mapId="trip-map"
+            disableDefaultUI
+            gestureHandling="greedy"
+          >
+            <MapController
+              selectedDayId={selectedDayId}
+              places={places}
+              focusedPlaceId={focusedPlaceId}
+            />
+            {places.map((place, i) => {
+              const isFocused = place.id === focusedPlaceId
+              return (
+                <AdvancedMarker key={place.id} position={{ lat: place.lat, lng: place.lng }}>
+                  <div
+                    className={`flex items-center justify-center rounded-full font-bold text-white shadow transition-all ${
+                      isFocused
+                        ? 'h-8 w-8 bg-blue-600 text-xs'
+                        : 'h-6 w-6 bg-gray-900 text-[10px]'
+                    }`}
+                  >
+                    {i + 1}
+                  </div>
+                </AdvancedMarker>
+              )
+            })}
+            {polylinePath.length >= 2 && (
+              <Polyline path={polylinePath} />
+            )}
+          </Map>
+        </div>
+      )}
+
+      {/* 장소 리스트 */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         <PlaceList
           days={days}
           editMode={editMode}
