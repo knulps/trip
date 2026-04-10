@@ -19,6 +19,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   const [days, setDays] = useState(initialDays)
   const [selectedDayId, setSelectedDayId] = useState(initialDays[0]?.id ?? null)
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
+  const [editMode, setEditMode] = useState(false)
 
   const dayRefs = useRef<globalThis.Map<string, HTMLDivElement>>(new globalThis.Map())
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -140,39 +141,29 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     setSelectedDayId(dayId)
   }
 
-  // Update selectedDayId based on scroll position via IntersectionObserver
+  // Update selectedDayId based on scroll position
   useEffect(() => {
     const container = scrollContainerRef.current
-    if (!container || days.length === 0) return
+    if (!container) return
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        // Find the most visible day section
-        let bestEntry: IntersectionObserverEntry | null = null
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            if (!bestEntry || entry.intersectionRatio > bestEntry.intersectionRatio) {
-              bestEntry = entry
-            }
-          }
+    function handleScroll() {
+      const containerTop = container!.getBoundingClientRect().top
+      let closestId: string | null = null
+      let closestDist = Infinity
+
+      dayRefs.current.forEach((el, dayId) => {
+        const dist = Math.abs(el.getBoundingClientRect().top - containerTop)
+        if (dist < closestDist) {
+          closestDist = dist
+          closestId = dayId
         }
-        if (bestEntry) {
-          const dayId = bestEntry.target.getAttribute('data-day-id')
-          if (dayId) setSelectedDayId(dayId)
-        }
-      },
-      { root: container, threshold: [0.1, 0.3, 0.5, 0.7] }
-    )
+      })
 
-    // Observe all day sections after a small delay so refs are populated
-    const timer = setTimeout(() => {
-      dayRefs.current.forEach((el) => observer.observe(el))
-    }, 100)
-
-    return () => {
-      clearTimeout(timer)
-      observer.disconnect()
+      if (closestId) setSelectedDayId(closestId)
     }
+
+    container.addEventListener('scroll', handleScroll, { passive: true })
+    return () => container.removeEventListener('scroll', handleScroll)
   }, [days])
 
   return (
@@ -193,8 +184,19 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
         <InviteButton tripId={trip.id} inviteToken={trip.invite_token} />
       </header>
 
-      {/* 날짜 탭 */}
-      <div className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-hide">
+      {/* 날짜 탭 + 편집 토글 */}
+      <div className="flex items-center gap-2 px-4 pb-3">
+        <button
+          onClick={() => setEditMode(v => !v)}
+          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+            editMode
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+          }`}
+        >
+          {editMode ? '완료' : '편집'}
+        </button>
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
         {days.map((day, i) => {
           const date = new Date(day.date + 'T00:00:00')
           const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
@@ -231,6 +233,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           )
         })}
         <AddDayButton tripId={trip.id} onAdded={refreshDays} />
+        </div>
       </div>
 
       {/* 지도 — 45dvh */}
@@ -273,6 +276,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
       <div ref={scrollContainerRef} style={{ height: '55dvh' }} className="overflow-y-auto">
         <PlaceList
           days={days}
+          editMode={editMode}
           onRefresh={refreshDays}
           onFocusPlace={(place) => {
             setFocusedPlaceId(place.id)

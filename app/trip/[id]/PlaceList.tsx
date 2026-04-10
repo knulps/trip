@@ -28,12 +28,13 @@ type DayWithPlaces = Day & { places: Place[] }
 
 interface Props {
   days: DayWithPlaces[]
+  editMode: boolean
   onRefresh: () => void
   onFocusPlace?: (place: Place) => void
-  dayRefs: React.RefObject<Map<string, HTMLDivElement>>
+  dayRefs: React.RefObject<globalThis.Map<string, HTMLDivElement>>
 }
 
-/* ── PlaceItem: non-edit mode, no dnd-kit hooks ── */
+/* ── PlaceItem: non-edit mode ── */
 function PlaceItem({
   place,
   index,
@@ -50,10 +51,7 @@ function PlaceItem({
       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white dark:bg-gray-100 dark:text-gray-900">
         {index + 1}
       </span>
-      <div
-        className="flex-1 min-w-0 cursor-pointer"
-        onClick={() => onEdit(place)}
-      >
+      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(place)}>
         <p className="text-sm font-medium truncate">{place.name}</p>
         <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
           {place.visit_time && <span className="mr-1">{place.visit_time.slice(0, 5)}</span>}
@@ -80,17 +78,15 @@ function PlaceItem({
   )
 }
 
-/* ── SortablePlaceItem: edit mode only, inside DndContext ── */
+/* ── SortablePlaceItem: edit mode, inside DndContext ── */
 function SortablePlaceItem({
   place,
   index,
   onDelete,
-  onEdit,
 }: {
   place: Place
   index: number
   onDelete: (id: string) => void
-  onEdit: (place: Place) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: place.id,
@@ -109,13 +105,14 @@ function SortablePlaceItem({
         {...listeners}
         className="shrink-0 cursor-grab text-gray-300 active:cursor-grabbing dark:text-gray-600"
         aria-label="드래그 핸들"
+        style={{ touchAction: 'none' }}
       >
         ⠿
       </span>
       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white dark:bg-gray-100 dark:text-gray-900">
         {index + 1}
       </span>
-      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(place)}>
+      <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{place.name}</p>
         <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
           {place.visit_time && <span className="mr-1">{place.visit_time.slice(0, 5)}</span>}
@@ -133,19 +130,16 @@ function SortablePlaceItem({
   )
 }
 
-/* ── EditableDaySection: wraps a day's places in DndContext ── */
-function EditableDaySection({
+/* ── DraggableDayPlaces: one day's places wrapped in DndContext ── */
+function DraggableDayPlaces({
   places,
   onRefresh,
-  onDone,
 }: {
   places: Place[]
   onRefresh: () => void
-  onDone: () => void
 }) {
   const supabase = createClient()
   const [localPlaces, setLocalPlaces] = useState(places)
-  const [editingPlace, setEditingPlace] = useState<Place | null>(null)
 
   useEffect(() => {
     setLocalPlaces(places)
@@ -185,47 +179,20 @@ function EditableDaySection({
   }
 
   return (
-    <>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={localPlaces.map(p => p.id)} strategy={verticalListSortingStrategy}>
-          <ol className="flex flex-col divide-y divide-gray-50 px-4 dark:divide-gray-800">
-            {localPlaces.map((place, i) => (
-              <SortablePlaceItem
-                key={place.id}
-                place={place}
-                index={i}
-                onDelete={deletePlace}
-                onEdit={setEditingPlace}
-              />
-            ))}
-          </ol>
-        </SortableContext>
-      </DndContext>
-
-      {/* Done button at the bottom of the editable section */}
-      <div className="flex justify-end px-4 py-2">
-        <button
-          onClick={() => { onDone() }}
-          className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors dark:border-gray-700 dark:text-gray-300"
-        >
-          완료
-        </button>
-      </div>
-
-      {editingPlace && (
-        <EditPlaceModal
-          place={editingPlace}
-          onClose={() => setEditingPlace(null)}
-          onSave={onRefresh}
-        />
-      )}
-    </>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={localPlaces.map(p => p.id)} strategy={verticalListSortingStrategy}>
+        <ol className="flex flex-col divide-y divide-gray-50 px-4 dark:divide-gray-800">
+          {localPlaces.map((place, i) => (
+            <SortablePlaceItem key={place.id} place={place} index={i} onDelete={deletePlace} />
+          ))}
+        </ol>
+      </SortableContext>
+    </DndContext>
   )
 }
 
 /* ── Main PlaceList ── */
-export default function PlaceList({ days, onRefresh, onFocusPlace, dayRefs }: Props) {
-  const [editingDayId, setEditingDayId] = useState<string | null>(null)
+export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, dayRefs }: Props) {
   const [editingPlace, setEditingPlace] = useState<Place | null>(null)
 
   if (days.length === 0) {
@@ -240,7 +207,6 @@ export default function PlaceList({ days, onRefresh, onFocusPlace, dayRefs }: Pr
     <>
       <div className="flex flex-col">
         {days.map((day, dayIndex) => {
-          const isEditing = editingDayId === day.id
           const date = new Date(day.date + 'T00:00:00')
           const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
           const dateLabel = `${date.getMonth() + 1}/${date.getDate()} ${dayOfWeek}`
@@ -263,32 +229,14 @@ export default function PlaceList({ days, onRefresh, onFocusPlace, dayRefs }: Pr
                       · {day.places.length}개 장소
                     </span>
                   </span>
-                  <div className="flex items-center gap-2">
-                    {!isEditing && (
-                      <>
-                        <button
-                          onClick={() => setEditingDayId(day.id)}
-                          className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors dark:border-gray-700 dark:text-gray-300"
-                        >
-                          ✏️ 편집
-                        </button>
-                        <Link
-                          href={`/trip/add?dayId=${day.id}`}
-                          className="rounded-lg bg-gray-900 px-3.5 py-1.5 text-xs font-medium text-white dark:bg-gray-100 dark:text-gray-900"
-                        >
-                          + 장소 추가
-                        </Link>
-                      </>
-                    )}
-                    {isEditing && (
-                      <button
-                        onClick={() => setEditingDayId(null)}
-                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors dark:border-gray-700 dark:text-gray-300"
-                      >
-                        완료
-                      </button>
-                    )}
-                  </div>
+                  {!editMode && (
+                    <Link
+                      href={`/trip/add?dayId=${day.id}`}
+                      className="rounded-lg bg-gray-900 px-3.5 py-1.5 text-xs font-medium text-white dark:bg-gray-100 dark:text-gray-900"
+                    >
+                      + 장소 추가
+                    </Link>
+                  )}
                 </div>
               </div>
 
@@ -297,12 +245,8 @@ export default function PlaceList({ days, onRefresh, onFocusPlace, dayRefs }: Pr
                 <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
                   <p className="text-sm text-gray-400">아직 장소가 없어요</p>
                 </div>
-              ) : isEditing ? (
-                <EditableDaySection
-                  places={day.places}
-                  onRefresh={onRefresh}
-                  onDone={() => setEditingDayId(null)}
-                />
+              ) : editMode ? (
+                <DraggableDayPlaces places={day.places} onRefresh={onRefresh} />
               ) : (
                 <ol className="flex flex-col px-4">
                   {day.places.map((place, i) => (
