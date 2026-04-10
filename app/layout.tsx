@@ -8,8 +8,13 @@ const geist = Geist({
 })
 
 export const metadata: Metadata = {
-  title: 'Trip',
+  title: '여행 일정',
   description: '지인들과 함께 만드는 여행 일정',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: '여행 일정',
+  },
 }
 
 export const viewport: Viewport = {
@@ -17,6 +22,11 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: 'cover',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#111827' },
+    { media: '(prefers-color-scheme: dark)', color: '#030712' },
+  ],
 }
 
 export default function RootLayout({
@@ -26,7 +36,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className={`${geist.variable} h-full antialiased`}>
-      <body className="h-full bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">{children}</body>
+      <head>
+        <link rel="apple-touch-icon" href="/icon.svg" />
+      </head>
+      <body className="h-full bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100">
+        {children}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}`,
+          }}
+        />
+      </body>
     </html>
   )
 }

@@ -22,6 +22,8 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
 
   const scrollCooldown = useRef(false)
   const lastScrollTop = useRef(0)
+  const scrollAccumulator = useRef(0)
+  const SCROLL_THRESHOLD = 50
 
   const selectedDay = days.find(d => d.id === selectedDayId) ?? days[0]
   const places = selectedDay?.places ?? []
@@ -132,26 +134,36 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     if (!canScroll) return
     if (scrollCooldown.current) return
 
-    const direction = scrollTop > lastScrollTop.current ? 'down' : 'up'
+    const delta = scrollTop - lastScrollTop.current
     lastScrollTop.current = scrollTop
 
-    const atTop = scrollTop === 0
+    const atTop = scrollTop <= 0
     const atBottom = scrollTop + clientHeight >= scrollHeight - 2
 
-    if (atTop && direction === 'up') {
-      const currentIndex = days.findIndex(d => d.id === selectedDayId)
-      if (currentIndex > 0) {
-        setSelectedDayId(days[currentIndex - 1].id)
-        scrollCooldown.current = true
-        setTimeout(() => { scrollCooldown.current = false }, 300)
+    if (atTop && delta < 0) {
+      scrollAccumulator.current += Math.abs(delta)
+      if (scrollAccumulator.current >= SCROLL_THRESHOLD) {
+        const currentIndex = days.findIndex(d => d.id === selectedDayId)
+        if (currentIndex > 0) {
+          setSelectedDayId(days[currentIndex - 1].id)
+          scrollCooldown.current = true
+          scrollAccumulator.current = 0
+          setTimeout(() => { scrollCooldown.current = false }, 500)
+        }
       }
-    } else if (atBottom && direction === 'down') {
-      const currentIndex = days.findIndex(d => d.id === selectedDayId)
-      if (currentIndex < days.length - 1) {
-        setSelectedDayId(days[currentIndex + 1].id)
-        scrollCooldown.current = true
-        setTimeout(() => { scrollCooldown.current = false }, 300)
+    } else if (atBottom && delta > 0) {
+      scrollAccumulator.current += Math.abs(delta)
+      if (scrollAccumulator.current >= SCROLL_THRESHOLD) {
+        const currentIndex = days.findIndex(d => d.id === selectedDayId)
+        if (currentIndex < days.length - 1) {
+          setSelectedDayId(days[currentIndex + 1].id)
+          scrollCooldown.current = true
+          scrollAccumulator.current = 0
+          setTimeout(() => { scrollCooldown.current = false }, 500)
+        }
       }
+    } else {
+      scrollAccumulator.current = 0
     }
   }
 
@@ -159,7 +171,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
     <div className="flex flex-col h-full">
       {/* 헤더 */}
-      <header className="flex items-center gap-3 px-4 pt-10 pb-3">
+      <header className="flex items-center gap-3 px-4 pb-3" style={{ paddingTop: 'max(2.5rem, env(safe-area-inset-top))' }}>
         <Link href="/" className="text-gray-400 dark:text-gray-500">
           ‹
         </Link>
@@ -200,9 +212,11 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                 <button
                   aria-label="날짜 삭제"
                   onClick={() => deleteDay(day.id)}
-                  className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-gray-400 text-[9px] text-white hover:bg-red-400 dark:bg-gray-600 dark:hover:bg-red-500"
+                  className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center"
                 >
-                  ✕
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-gray-400 text-[9px] text-white hover:bg-red-400 dark:bg-gray-600 dark:hover:bg-red-500">
+                    ✕
+                  </span>
                 </button>
               )}
             </div>

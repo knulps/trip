@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Place } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 
@@ -14,6 +14,21 @@ export default function EditPlaceModal({ place, onClose, onSave }: Props) {
   const [name, setName] = useState(place.name)
   const [visitTime, setVisitTime] = useState(place.visit_time?.slice(0, 5) ?? '')
   const [saving, setSaving] = useState(false)
+
+  const [keyboardHeight, setKeyboardHeight] = useState(0)
+
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+
+    function handleResize() {
+      const kbHeight = window.innerHeight - vv!.height
+      setKeyboardHeight(kbHeight > 0 ? kbHeight : 0)
+    }
+
+    vv.addEventListener('resize', handleResize)
+    return () => vv.removeEventListener('resize', handleResize)
+  }, [])
 
   const supabase = createClient()
 
@@ -34,7 +49,8 @@ export default function EditPlaceModal({ place, onClose, onSave }: Props) {
       onClick={onClose}
     >
       <div
-        className="fixed bottom-0 left-0 right-0 rounded-t-2xl bg-white p-6 dark:bg-gray-900"
+        className="fixed bottom-0 left-0 right-0 rounded-t-2xl bg-white p-6 transition-transform dark:bg-gray-900"
+        style={{ transform: keyboardHeight > 0 ? `translateY(-${keyboardHeight}px)` : undefined }}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 text-base font-semibold text-gray-900 dark:text-gray-100">

@@ -126,7 +126,7 @@ export default function PlaceList({ dayId, places, onRefresh, onFocusPlace }: Pr
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { distance: 8 } })
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   )
 
   async function deletePlace(id: string) {
