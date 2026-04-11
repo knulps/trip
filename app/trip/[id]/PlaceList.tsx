@@ -31,6 +31,7 @@ interface Props {
   editMode: boolean
   onRefresh: () => void
   onFocusPlace?: (place: Place) => void
+  onSelectRoute?: (origin: { lat: number; lng: number }, destination: { lat: number; lng: number }, mode: string) => void
   dayRefs: React.RefObject<globalThis.Map<string, HTMLDivElement>>
 }
 
@@ -192,7 +193,7 @@ function DraggableDayPlaces({
 }
 
 /* ── Main PlaceList ── */
-export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, dayRefs }: Props) {
+export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onSelectRoute, dayRefs }: Props) {
   const [editingPlace, setEditingPlace] = useState<Place | null>(null)
 
   if (days.length === 0) {
@@ -258,7 +259,7 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, day
                         onFocus={onFocusPlace}
                       />
                       {i < day.places.length - 1 && (
-                        <DistanceBadge from={place} to={day.places[i + 1]} />
+                        <DistanceBadge from={place} to={day.places[i + 1]} onSelectRoute={onSelectRoute} />
                       )}
                     </div>
                   ))}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
-import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps'
+import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
 import type { Trip, Day, Place } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import PlaceList from './PlaceList'
@@ -22,6 +22,11 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   const [editMode, setEditMode] = useState(false)
   const [mapCollapsed, setMapCollapsed] = useState(false)
   const [mapFocusMode, setMapFocusMode] = useState(false)
+  const [activeRoute, setActiveRoute] = useState<{
+    encodedPolyline: string
+    mode: string
+  } | null>(null)
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
 
   const dayRefs = useRef<globalThis.Map<string, HTMLDivElement>>(new globalThis.Map())
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -107,6 +112,39 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
       )
     }
   }, [supabase, trip.id])
+
+  async function handleSelectRoute(
+    origin: { lat: number; lng: number },
+    destination: { lat: number; lng: number },
+    mode: string
+  ) {
+    setActiveRoute(null)
+    try {
+      const res = await fetch('/api/route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: { lat: origin.lat, lng: origin.lng },
+          destination: { lat: destination.lat, lng: destination.lng },
+          mode,
+        }),
+      })
+      if (!res.ok) return
+      const data = await res.json() as { encodedPolyline?: string }
+      if (data.encodedPolyline) {
+        setActiveRoute({ encodedPolyline: data.encodedPolyline, mode })
+        setMapCollapsed(false)
+      }
+    } catch { /* ignore */ }
+  }
+
+  function requestCurrentLocation() {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => alert('위치 정보를 가져올 수 없습니다.'),
+      { enableHighAccuracy: true }
+    )
+  }
 
   async function deleteDay(dayId: string) {
     const day = days.find(d => d.id === dayId)
@@ -300,8 +338,11 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
               </AdvancedMarker>
             )
           })}
-          {polylinePath.length >= 2 && (
+          {!activeRoute && polylinePath.length >= 2 && (
             <Polyline path={polylinePath} />
+          )}
+          {activeRoute && (
+            <RoutePolyline encodedPolyline={activeRoute.encodedPolyline} mode={activeRoute.mode} />
           )}
         </Map>
       </div>
@@ -321,6 +362,26 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
             <div className="px-4 py-3">
               <p className="text-sm font-medium dark:text-gray-100">{focusedPlace.name}</p>
               <p className="text-xs text-gray-400 dark:text-gray-500">{focusedPlace.address}</p>
+
+              <button
+                onClick={requestCurrentLocation}
+                className="mt-2 text-xs text-blue-600 dark:text-blue-400"
+              >
+                📍 현위치에서 거리 확인
+              </button>
+
+              {currentLocation && (
+                <CurrentLocationDistance
+                  from={currentLocation}
+                  to={focusedPlace}
+                  onSelectRoute={(mode) => handleSelectRoute(
+                    currentLocation,
+                    { lat: focusedPlace.lat, lng: focusedPlace.lng },
+                    mode
+                  )}
+                />
+              )}
+
               <div className="flex gap-2 mt-2">
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${focusedPlace.lat},${focusedPlace.lng}`}
@@ -343,6 +404,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
             onFocusPlace={(place) => {
               setFocusedPlaceId(place.id)
             }}
+            onSelectRoute={handleSelectRoute}
             dayRefs={dayRefs}
           />
         </div>
@@ -456,4 +518,75 @@ function Polyline({ path }: { path: { lat: number; lng: number }[] }) {
   }, [map, path])
 
   return null
+}
+
+// Route Polyline (decoded from encoded polyline)
+function RoutePolyline({ encodedPolyline, mode }: { encodedPolyline: string; mode: string }) {
+  const map = useMap()
+  const geometryLib = useMapsLibrary('geometry')
+
+  useEffect(() => {
+    if (!map || !geometryLib || !encodedPolyline) return
+
+    const path = geometryLib.encoding.decodePath(encodedPolyline)
+    const color = mode === 'TRANSIT' ? '#2563eb' : mode === 'DRIVE' ? '#f59e0b' : '#10b981'
+
+    const polyline = new google.maps.Polyline({
+      path,
+      geodesic: true,
+      strokeColor: color,
+      strokeOpacity: 0.8,
+      strokeWeight: 4,
+    })
+
+    polyline.setMap(map)
+    return () => polyline.setMap(null)
+  }, [map, geometryLib, encodedPolyline, mode])
+
+  return null
+}
+
+// 현위치에서 장소까지 거리
+function CurrentLocationDistance({
+  from,
+  to,
+  onSelectRoute,
+}: {
+  from: { lat: number; lng: number }
+  to: Place
+  onSelectRoute?: (mode: string) => void
+}) {
+  const [results, setResults] = useState<Array<{ mode: string; minutes: number; distance: string; icon: string }> | null>(null)
+
+  useEffect(() => {
+    fetch('/api/distance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        origin: { lat: from.lat, lng: from.lng },
+        destination: { lat: to.lat, lng: to.lng },
+      }),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { results?: Array<{ mode: string; minutes: number; distance: string; icon: string }> } | null) => {
+        if (data?.results) setResults(data.results)
+      })
+      .catch(() => {})
+  }, [from.lat, from.lng, to.lat, to.lng])
+
+  if (!results) return <p className="text-[10px] text-gray-400 mt-1">계산 중...</p>
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      {results.map((r) => (
+        <button
+          key={r.mode}
+          onClick={() => onSelectRoute?.(r.mode)}
+          className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 active:bg-blue-100 dark:bg-gray-800 dark:text-gray-400"
+        >
+          {r.icon} {r.minutes}분 · {r.distance}
+        </button>
+      ))}
+    </div>
+  )
 }

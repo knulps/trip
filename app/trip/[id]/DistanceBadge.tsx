@@ -3,20 +3,27 @@ import { useEffect, useState } from 'react'
 import type { Place } from '@/types/supabase'
 
 interface DistanceResult {
+  mode: string
   minutes: number
   distance: string
   icon: string
 }
 
-const cache = new Map<string, DistanceResult | null>()
+interface DistanceBadgeProps {
+  from: Place
+  to: Place
+  onSelectRoute?: (origin: { lat: number; lng: number }, destination: { lat: number; lng: number }, mode: string) => void
+}
 
-export default function DistanceBadge({ from, to }: { from: Place; to: Place }) {
-  const [result, setResult] = useState<DistanceResult | null | undefined>(undefined)
+const cache = new Map<string, DistanceResult[] | null>()
+
+export default function DistanceBadge({ from, to, onSelectRoute }: DistanceBadgeProps) {
+  const [results, setResults] = useState<DistanceResult[] | null | undefined>(undefined)
   const cacheKey = `${from.id}:${to.id}`
 
   useEffect(() => {
     if (cache.has(cacheKey)) {
-      setResult(cache.get(cacheKey))
+      setResults(cache.get(cacheKey))
       return
     }
 
@@ -29,24 +36,30 @@ export default function DistanceBadge({ from, to }: { from: Place; to: Place }) 
       }),
     })
       .then(r => r.ok ? r.json() : null)
-      .then((data: DistanceResult | null) => {
-        const val = data?.minutes != null ? data : null
+      .then((data: { results?: DistanceResult[] } | null) => {
+        const val = data?.results?.length ? data.results : null
         cache.set(cacheKey, val)
-        setResult(val)
+        setResults(val)
       })
       .catch(() => {
         cache.set(cacheKey, null)
-        setResult(null)
+        setResults(null)
       })
   }, [cacheKey, from.lat, from.lng, to.lat, to.lng])
 
-  if (!result) return null  // loading or error → show nothing
+  if (!results) return null  // loading or error → show nothing
 
   return (
-    <div className="flex items-center justify-center py-1">
-      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-        {result.icon} {result.minutes}분 · {result.distance}
-      </span>
+    <div className="flex items-center justify-center gap-2 py-1.5">
+      {results.map(r => (
+        <button
+          key={r.mode}
+          onClick={() => onSelectRoute?.({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, r.mode)}
+          className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 active:bg-blue-100 dark:bg-gray-800 dark:text-gray-400"
+        >
+          {r.icon} {r.minutes}분
+        </button>
+      ))}
     </div>
   )
 }
