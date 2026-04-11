@@ -20,7 +20,6 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   const [selectedDayId, setSelectedDayId] = useState(initialDays[0]?.id ?? null)
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
-  const [mapCollapsed, setMapCollapsed] = useState(false)
   const [mapFocusMode, setMapFocusMode] = useState(false)
   const [activeRoute, setActiveRoute] = useState<{
     encodedPolyline: string
@@ -30,7 +29,6 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
 
   const dayRefs = useRef<globalThis.Map<string, HTMLDivElement>>(new globalThis.Map())
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-  const lastScrollTop = useRef(0)
 
   const selectedDay = days.find(d => d.id === selectedDayId) ?? days[0]
   const places = selectedDay?.places ?? []
@@ -133,7 +131,6 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
       const data = await res.json() as { encodedPolyline?: string }
       if (data.encodedPolyline) {
         setActiveRoute({ encodedPolyline: data.encodedPolyline, mode })
-        setMapCollapsed(false)
       }
     } catch { /* ignore */ }
   }
@@ -187,22 +184,13 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     setSelectedDayId(dayId)
   }
 
-  // Update selectedDayId based on scroll position + auto-hide/show map
+  // Update selectedDayId based on scroll position
   useEffect(() => {
     const container = scrollContainerRef.current
     if (!container) return
 
     function handleScroll() {
       const containerTop = container!.getBoundingClientRect().top
-      const scrollTop = container!.scrollTop
-      const delta = scrollTop - lastScrollTop.current
-      lastScrollTop.current = scrollTop
-
-      // Map auto-hide: scroll down → collapse, scroll up → expand
-      if (delta > 10) setMapCollapsed(true)
-      else if (delta < -10) setMapCollapsed(false)
-
-      // Day tracking
       let closestId: string | null = null
       let closestDist = Infinity
 
@@ -292,8 +280,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
       {/* 지도 — 단일 인스턴스, 높이만 변경 */}
       <div
         style={{
-          height: mapFocusMode ? '75dvh' : mapCollapsed ? '0' : '35dvh',
-          overflow: 'hidden',
+          height: mapFocusMode ? '75dvh' : '35dvh',
           transition: 'height 0.3s ease',
         }}
         className="dark:bg-gray-900"
@@ -304,6 +291,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           mapId="trip-map"
           disableDefaultUI
           gestureHandling="greedy"
+          colorScheme="FOLLOW_SYSTEM"
           onClick={(e) => {
             if (!e.detail?.placeId) {
               setMapFocusMode(true)
@@ -321,10 +309,6 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
               <AdvancedMarker
                 key={place.id}
                 position={{ lat: place.lat, lng: place.lng }}
-                onClick={() => {
-                  setFocusedPlaceId(place.id)
-                  setMapFocusMode(true)
-                }}
               >
                 <div
                   className={`flex items-center justify-center rounded-full font-bold text-white shadow transition-all ${
