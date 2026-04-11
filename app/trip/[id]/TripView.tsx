@@ -21,12 +21,19 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [mapCollapsed, setMapCollapsed] = useState(false)
+  const [mapFocusMode, setMapFocusMode] = useState(false)
 
   const dayRefs = useRef<globalThis.Map<string, HTMLDivElement>>(new globalThis.Map())
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const lastScrollTop = useRef(0)
 
   const selectedDay = days.find(d => d.id === selectedDayId) ?? days[0]
   const places = selectedDay?.places ?? []
+
+  // 포커스 모드에서 표시할 장소
+  const focusedPlace = focusedPlaceId
+    ? places.find(p => p.id === focusedPlaceId) ?? places[0] ?? null
+    : places[0] ?? null
 
   // Polyline 좌표 — useMemo로 불필요한 재계산 방지
   const polylinePath = useMemo(
@@ -142,13 +149,22 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     setSelectedDayId(dayId)
   }
 
-  // Update selectedDayId based on scroll position
+  // Update selectedDayId based on scroll position + auto-hide/show map
   useEffect(() => {
     const container = scrollContainerRef.current
     if (!container) return
 
     function handleScroll() {
       const containerTop = container!.getBoundingClientRect().top
+      const scrollTop = container!.scrollTop
+      const delta = scrollTop - lastScrollTop.current
+      lastScrollTop.current = scrollTop
+
+      // Map auto-hide: scroll down → collapse, scroll up → expand
+      if (delta > 10) setMapCollapsed(true)
+      else if (delta < -10) setMapCollapsed(false)
+
+      // Day tracking
       let closestId: string | null = null
       let closestDist = Infinity
 
@@ -235,64 +251,102 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
         </div>
       </div>
 
-      {/* 지도 접기/펼치기 토글 */}
-      <button
-        onClick={() => setMapCollapsed(v => !v)}
-        className="flex items-center justify-center w-full py-1 text-xs text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+      {/* 지도 — 단일 인스턴스, 높이만 변경 */}
+      <div
+        style={{
+          height: mapFocusMode ? '75dvh' : mapCollapsed ? '0' : '35dvh',
+          overflow: 'hidden',
+          transition: 'height 0.3s ease',
+        }}
+        className="dark:bg-gray-900"
       >
-        {mapCollapsed ? '▼ 지도 펼치기' : '▲ 지도 접기'}
-      </button>
+        <Map
+          defaultCenter={mapDefaultCenter}
+          defaultZoom={13}
+          mapId="trip-map"
+          disableDefaultUI
+          gestureHandling="greedy"
+          onClick={(e) => {
+            if (!e.detail?.placeId) {
+              setMapFocusMode(true)
+            }
+          }}
+        >
+          <MapController
+            selectedDayId={selectedDayId}
+            places={places}
+            focusedPlaceId={focusedPlaceId}
+          />
+          {places.map((place, i) => {
+            const isFocused = place.id === focusedPlaceId
+            return (
+              <AdvancedMarker
+                key={place.id}
+                position={{ lat: place.lat, lng: place.lng }}
+                onClick={() => {
+                  setFocusedPlaceId(place.id)
+                  setMapFocusMode(true)
+                }}
+              >
+                <div
+                  className={`flex items-center justify-center rounded-full font-bold text-white shadow transition-all ${
+                    isFocused
+                      ? 'h-8 w-8 bg-blue-600 text-xs'
+                      : 'h-6 w-6 bg-gray-900 text-[10px]'
+                  }`}
+                >
+                  {i + 1}
+                </div>
+              </AdvancedMarker>
+            )
+          })}
+          {polylinePath.length >= 2 && (
+            <Polyline path={polylinePath} />
+          )}
+        </Map>
+      </div>
 
-      {/* 지도 */}
-      {!mapCollapsed && (
-        <div style={{ height: '35dvh' }} className="dark:bg-gray-900">
-          <Map
-            defaultCenter={mapDefaultCenter}
-            defaultZoom={13}
-            mapId="trip-map"
-            disableDefaultUI
-            gestureHandling="greedy"
-          >
-            <MapController
-              selectedDayId={selectedDayId}
-              places={places}
-              focusedPlaceId={focusedPlaceId}
-            />
-            {places.map((place, i) => {
-              const isFocused = place.id === focusedPlaceId
-              return (
-                <AdvancedMarker key={place.id} position={{ lat: place.lat, lng: place.lng }}>
-                  <div
-                    className={`flex items-center justify-center rounded-full font-bold text-white shadow transition-all ${
-                      isFocused
-                        ? 'h-8 w-8 bg-blue-600 text-xs'
-                        : 'h-6 w-6 bg-gray-900 text-[10px]'
-                    }`}
-                  >
-                    {i + 1}
-                  </div>
-                </AdvancedMarker>
-              )
-            })}
-            {polylinePath.length >= 2 && (
-              <Polyline path={polylinePath} />
-            )}
-          </Map>
+      {/* 포커스 모드: 하단 장소 카드 / 일반 모드: 장소 리스트 */}
+      {mapFocusMode ? (
+        <div className="flex-1 overflow-hidden">
+          <div className="px-4 py-3 flex items-center justify-between border-t border-gray-100 dark:border-gray-800">
+            <button
+              onClick={() => setMapFocusMode(false)}
+              className="text-gray-400 dark:text-gray-500 text-sm"
+            >
+              ← 목록
+            </button>
+          </div>
+          {focusedPlace && (
+            <div className="px-4 py-3">
+              <p className="text-sm font-medium dark:text-gray-100">{focusedPlace.name}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">{focusedPlace.address}</p>
+              <div className="flex gap-2 mt-2">
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${focusedPlace.lat},${focusedPlace.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 dark:text-blue-400"
+                >
+                  길찾기 ↗
+                </a>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+          <PlaceList
+            days={days}
+            editMode={editMode}
+            onRefresh={refreshDays}
+            onFocusPlace={(place) => {
+              setFocusedPlaceId(place.id)
+            }}
+            dayRefs={dayRefs}
+          />
         </div>
       )}
-
-      {/* 장소 리스트 */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
-        <PlaceList
-          days={days}
-          editMode={editMode}
-          onRefresh={refreshDays}
-          onFocusPlace={(place) => {
-            setFocusedPlaceId(place.id)
-          }}
-          dayRefs={dayRefs}
-        />
-      </div>
     </div>
     </APIProvider>
   )
