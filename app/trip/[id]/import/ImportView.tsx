@@ -17,6 +17,8 @@ interface ParsedPlace {
   address: string
   selected: boolean
   resolved: boolean
+  added: boolean       // 이미 추가된 장소
+  addedToDay: string   // 추가된 Day 라벨
 }
 
 function parseCSVLine(line: string): string[] {
@@ -42,23 +44,29 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
   const router = useRouter()
   const placesLib = useMapsLibrary('places')
 
-  const [file, setFile] = useState<File | null>(null)
   const [parsedPlaces, setParsedPlaces] = useState<ParsedPlace[]>([])
   const [selectedDayId, setSelectedDayId] = useState<string>(days[0]?.id ?? '')
   const [importing, setImporting] = useState(false)
   const [resolving, setResolving] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
 
+  function getDayLabel(dayId: string) {
+    const idx = days.findIndex(d => d.id === dayId)
+    if (idx === -1) return ''
+    const day = days[idx]
+    const date = new Date(day.date + 'T00:00:00')
+    const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
+    return `Day ${idx + 1} (${date.getMonth() + 1}/${date.getDate()} ${dayOfWeek})`
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (!f) return
-    setFile(f)
 
     const reader = new FileReader()
     reader.onload = (ev) => {
       const text = ev.target?.result as string
       const lines = text.split('\n').filter(line => line.trim())
-      // Skip header (제목,메모,URL,태그,댓글) and filter empty rows
       const dataLines = lines.slice(1).filter(line => {
         const cols = parseCSVLine(line)
         return cols[0]?.trim()
@@ -73,8 +81,10 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
           lat: null,
           lng: null,
           address: '',
-          selected: true,
+          selected: false,
           resolved: false,
+          added: false,
+          addedToDay: '',
         }
       })
 
@@ -83,24 +93,30 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
     reader.readAsText(f, 'UTF-8')
   }
 
-  async function resolveCoordinates() {
-    if (!placesLib || parsedPlaces.length === 0) return
+  // 선택된 항목 중 미해석만 좌표 검색
+  async function resolveSelected() {
+    if (!placesLib) return
+    const toResolve = parsedPlaces.filter(p => p.selected && !p.resolved && !p.added)
+    if (toResolve.length === 0) return
+
     setResolving(true)
-    setProgress({ current: 0, total: parsedPlaces.length })
+    setProgress({ current: 0, total: toResolve.length })
 
     const service = new placesLib.PlacesService(document.createElement('div'))
+    const updated = [...parsedPlaces]
 
-    const resolved = [...parsedPlaces]
-    for (let i = 0; i < resolved.length; i++) {
-      if (!resolved[i].selected) continue
+    let count = 0
+    for (let i = 0; i < updated.length; i++) {
+      if (!updated[i].selected || updated[i].resolved || updated[i].added) continue
 
-      setProgress({ current: i + 1, total: resolved.length })
+      count++
+      setProgress({ current: count, total: toResolve.length })
 
       try {
         const result = await new Promise<google.maps.places.PlaceResult | null>((resolve) => {
           service.findPlaceFromQuery(
             {
-              query: resolved[i].name,
+              query: updated[i].name,
               fields: ['geometry', 'formatted_address', 'name'],
             },
             (results, status) => {
@@ -114,37 +130,38 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
         })
 
         if (result?.geometry?.location) {
-          resolved[i] = {
-            ...resolved[i],
+          updated[i] = {
+            ...updated[i],
             lat: result.geometry.location.lat(),
             lng: result.geometry.location.lng(),
             address: result.formatted_address ?? '',
-            name: result.name ?? resolved[i].name,
+            name: result.name ?? updated[i].name,
             resolved: true,
           }
         } else {
-          resolved[i] = { ...resolved[i], resolved: true }
+          updated[i] = { ...updated[i], resolved: true }
         }
       } catch {
-        resolved[i] = { ...resolved[i], resolved: true }
+        updated[i] = { ...updated[i], resolved: true }
       }
 
-      // Small delay to avoid rate limiting
       await new Promise(r => setTimeout(r, 200))
     }
 
-    setParsedPlaces(resolved)
+    setParsedPlaces(updated)
     setResolving(false)
   }
 
-  async function importPlaces() {
+  // 선택된 항목을 선택한 Day에 추가
+  async function addSelectedToDay() {
     if (!selectedDayId) return
+    const toImport = parsedPlaces.filter(p => p.selected && p.resolved && p.lat != null && !p.added)
+    if (toImport.length === 0) return
+
     setImporting(true)
-
     const supabase = createClient()
-    const toImport = parsedPlaces.filter(p => p.selected && p.resolved && p.lat != null)
 
-    // 기존 장소 이름 조회 (중복 스킵용)
+    // 중복 체크
     const { data: existingPlaces } = await supabase
       .from('places')
       .select('name')
@@ -154,11 +171,16 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
     const filtered = toImport.filter(p => !existingNames.has(p.name))
     const skipped = toImport.length - filtered.length
 
-    if (skipped > 0) {
-      alert(`중복 ${skipped}개 스킵, ${filtered.length}개 가져옵니다.`)
+    if (filtered.length === 0) {
+      alert(`선택한 장소 ${toImport.length}개 모두 이미 추가되어 있습니다.`)
+      setImporting(false)
+      return
     }
 
-    // Get current last order_key for the day
+    if (skipped > 0) {
+      alert(`중복 ${skipped}개 스킵, ${filtered.length}개 추가합니다.`)
+    }
+
     const { data: lastPlaces } = await supabase
       .from('places')
       .select('order_key')
@@ -167,6 +189,8 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
       .limit(1)
 
     let lastKey = lastPlaces?.[0]?.order_key ?? null
+    const dayLabel = getDayLabel(selectedDayId)
+    const addedNames = new Set(filtered.map(p => p.name))
 
     for (const place of filtered) {
       const newKey = generateKeyBetween(lastKey, null)
@@ -182,9 +206,21 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
       lastKey = newKey
     }
 
+    // 추가된 항목 마킹
+    setParsedPlaces(prev => prev.map(p =>
+      addedNames.has(p.name) && p.selected && p.resolved && p.lat != null
+        ? { ...p, added: true, addedToDay: dayLabel, selected: false }
+        : p
+    ))
+
     setImporting(false)
-    router.push(`/trip/${trip.id}`)
   }
+
+  const selectableCount = parsedPlaces.filter(p => !p.added).length
+  const selectedCount = parsedPlaces.filter(p => p.selected && !p.added).length
+  const needsResolve = parsedPlaces.some(p => p.selected && !p.resolved && !p.added)
+  const canImport = parsedPlaces.some(p => p.selected && p.resolved && p.lat != null && !p.added)
+  const allDone = parsedPlaces.length > 0 && parsedPlaces.every(p => p.added || !p.lat)
 
   return (
     <main className="flex flex-col h-full">
@@ -193,8 +229,8 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
         <h1 className="text-base font-semibold">장소 가져오기</h1>
       </header>
 
-      <div className="flex flex-col gap-4 px-4 flex-1 overflow-y-auto">
-        {/* Step 1: File upload */}
+      <div className="flex flex-col gap-4 px-4 flex-1 overflow-y-auto pb-4">
+        {/* 파일 업로드 */}
         <div>
           <label className="text-xs text-gray-500 dark:text-gray-400">CSV 파일 선택</label>
           <input
@@ -205,77 +241,108 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
           />
         </div>
 
-        {/* Step 2: Day selection */}
         {parsedPlaces.length > 0 && (
-          <div>
-            <label className="text-xs text-gray-500 dark:text-gray-400">가져올 Day 선택</label>
-            <select
-              value={selectedDayId}
-              onChange={(e) => setSelectedDayId(e.target.value)}
-              className="w-full mt-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            >
-              {days.map((day, i) => {
-                const date = new Date(day.date + 'T00:00:00')
-                const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
-                return (
-                  <option key={day.id} value={day.id}>
-                    Day {i + 1} - {date.getMonth() + 1}/{date.getDate()} {dayOfWeek}
-                  </option>
-                )
-              })}
-            </select>
-          </div>
-        )}
+          <>
+            {/* Day 선택 + 전체 선택/해제 */}
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedDayId}
+                onChange={(e) => setSelectedDayId(e.target.value)}
+                className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+              >
+                {days.map((day, i) => {
+                  const date = new Date(day.date + 'T00:00:00')
+                  const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
+                  return (
+                    <option key={day.id} value={day.id}>
+                      Day {i + 1} - {date.getMonth() + 1}/{date.getDate()} {dayOfWeek}
+                    </option>
+                  )
+                })}
+              </select>
+              <button
+                onClick={() => {
+                  const allSelected = parsedPlaces.filter(p => !p.added).every(p => p.selected)
+                  setParsedPlaces(prev => prev.map(p => p.added ? p : { ...p, selected: !allSelected }))
+                }}
+                className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 dark:border-gray-700 dark:text-gray-300"
+              >
+                {parsedPlaces.filter(p => !p.added).every(p => p.selected) ? '전체 해제' : '전체 선택'}
+              </button>
+            </div>
 
-        {/* Step 3: Resolve button */}
-        {parsedPlaces.length > 0 && !parsedPlaces.some(p => p.resolved) && (
-          <button
-            onClick={resolveCoordinates}
-            disabled={resolving}
-            className="w-full rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
-          >
-            {resolving ? `좌표 검색 중... (${progress.current}/${progress.total})` : `${parsedPlaces.filter(p => p.selected).length}개 장소 좌표 검색`}
-          </button>
-        )}
-
-        {/* Place list with checkboxes */}
-        {parsedPlaces.length > 0 && (
-          <div className="flex flex-col divide-y divide-gray-50 dark:divide-gray-800">
-            {parsedPlaces.map((place, i) => (
-              <div key={i} className="flex items-center gap-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={place.selected}
-                  onChange={() => {
-                    const updated = [...parsedPlaces]
-                    updated[i] = { ...updated[i], selected: !updated[i].selected }
-                    setParsedPlaces(updated)
-                  }}
-                  className="shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{place.name}</p>
-                  {place.memo && <p className="text-xs text-gray-400 truncate">{place.memo}</p>}
-                  {place.resolved && place.lat ? (
-                    <p className="text-xs text-green-500 truncate">&#10003; {place.address}</p>
-                  ) : place.resolved && !place.lat ? (
-                    <p className="text-xs text-red-400">&#10007; 좌표를 찾을 수 없음</p>
-                  ) : null}
-                </div>
+            {/* 액션 버튼 */}
+            {selectedCount > 0 && (
+              <div className="flex gap-2">
+                {needsResolve && (
+                  <button
+                    onClick={resolveSelected}
+                    disabled={resolving}
+                    className="flex-1 rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
+                  >
+                    {resolving ? `좌표 검색 중... (${progress.current}/${progress.total})` : `${selectedCount}개 좌표 검색`}
+                  </button>
+                )}
+                {canImport && (
+                  <button
+                    onClick={addSelectedToDay}
+                    disabled={importing}
+                    className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+                  >
+                    {importing ? '추가 중...' : `${parsedPlaces.filter(p => p.selected && p.resolved && p.lat && !p.added).length}개 추가`}
+                  </button>
+                )}
               </div>
-            ))}
-          </div>
-        )}
+            )}
 
-        {/* Import button */}
-        {parsedPlaces.some(p => p.resolved && p.lat) && (
-          <button
-            onClick={importPlaces}
-            disabled={importing}
-            className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {importing ? '가져오는 중...' : `${parsedPlaces.filter(p => p.selected && p.resolved && p.lat).length}개 장소 가져오기`}
-          </button>
+            {/* 완료 버튼 */}
+            {allDone && (
+              <button
+                onClick={() => router.push(`/trip/${trip.id}`)}
+                className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-medium text-white"
+              >
+                완료 - 여행으로 돌아가기
+              </button>
+            )}
+
+            {/* 장소 리스트 */}
+            <p className="text-xs text-gray-400">
+              {selectableCount}개 중 {selectedCount}개 선택
+              {parsedPlaces.some(p => p.added) && ` · ${parsedPlaces.filter(p => p.added).length}개 추가 완료`}
+            </p>
+            <div className="flex flex-col divide-y divide-gray-50 dark:divide-gray-800">
+              {parsedPlaces.map((place, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center gap-3 py-2 ${place.added ? 'opacity-40' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={place.selected}
+                    disabled={place.added}
+                    onChange={() => {
+                      if (place.added) return
+                      const updated = [...parsedPlaces]
+                      updated[i] = { ...updated[i], selected: !updated[i].selected }
+                      setParsedPlaces(updated)
+                    }}
+                    className="shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{place.name}</p>
+                    {place.memo && <p className="text-xs text-gray-400 truncate">{place.memo}</p>}
+                    {place.added ? (
+                      <p className="text-xs text-blue-500">&#10003; {place.addedToDay}에 추가됨</p>
+                    ) : place.resolved && place.lat ? (
+                      <p className="text-xs text-green-500 truncate">&#10003; {place.address}</p>
+                    ) : place.resolved && !place.lat ? (
+                      <p className="text-xs text-red-400">&#10007; 좌표를 찾을 수 없음</p>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </main>
