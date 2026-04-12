@@ -21,4 +21,10 @@ body {
     background-color: #030712;
     color: #f9fafb;
   }
+
+  /* Google Maps InfoWindow 팝업 텍스트 다크모드 강제 오버라이드 */
+  .gm-style-iw,
+  .gm-style-iw * {
+    color: #1f2937 !important;
+  }
 }
