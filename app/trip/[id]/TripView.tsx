@@ -5,6 +5,7 @@ import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.g
 import type { Trip, Day, Place } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import PlaceList from './PlaceList'
+import EditPlaceModal from './EditPlaceModal'
 import Link from 'next/link'
 
 type DayWithPlaces = Day & { places: Place[] }
@@ -357,18 +358,9 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           </div>
           {focusedPlace && (
             <div className="px-4">
-              {/* PlaceItem 스타일 */}
-              <div className="flex items-center gap-3 py-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{focusedPlace.name}</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
-                    {focusedPlace.visit_time && <span className="mr-1">{focusedPlace.visit_time.slice(0, 5)}</span>}
-                    {focusedPlace.address}
-                  </p>
-                  {focusedPlace.memo && (
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{focusedPlace.memo}</p>
-                  )}
-                </div>
+              {/* 장소 헤더 + 아이콘 */}
+              <div className="flex items-center gap-3 py-2">
+                <p className="flex-1 text-sm font-semibold">{focusedPlace.name}</p>
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${focusedPlace.lat},${focusedPlace.lng}`}
                   target="_blank"
@@ -387,6 +379,17 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                 >
                   ↗
                 </a>
+              </div>
+
+              {/* 상세 정보 */}
+              <div className="flex flex-col gap-1.5 pb-2 text-xs text-gray-500 dark:text-gray-400">
+                <p>{focusedPlace.address}</p>
+                {focusedPlace.visit_time && (
+                  <p>방문 시간: {focusedPlace.visit_time.slice(0, 5)}</p>
+                )}
+                {focusedPlace.memo && (
+                  <p className="whitespace-pre-wrap">{focusedPlace.memo}</p>
+                )}
               </div>
 
               {/* 현위치 거리 */}
