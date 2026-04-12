@@ -81,7 +81,7 @@ function AddPlaceViewInner() {
 
   return (
     <main className="flex flex-col h-full">
-      <header className="flex items-center gap-3 px-4 pt-10 pb-4">
+      <header className="flex items-center gap-3 px-4 pb-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
         <button onClick={() => router.back()} className="text-gray-400 dark:text-gray-500 text-lg">
           ‹
         </button>

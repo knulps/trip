@@ -303,14 +303,16 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           gestureHandling="greedy"
           colorScheme="FOLLOW_SYSTEM"
           onClick={(e) => {
-            if (!e.detail?.placeId) {
+            if (!e.detail?.placeId && allPlaces.length > 0) {
               setMapFocusMode(true)
+              if (!focusedPlaceId) setFocusedPlaceId(allPlaces[0].id)
             }
           }}
         >
           <MapController
             selectedDayId={selectedDayId}
             places={places}
+            allPlaces={allPlaces}
             focusedPlaceId={focusedPlaceId}
           />
           {places.map((place, i) => {
@@ -351,7 +353,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           {/* 헤더 */}
           <div className="px-4 py-2 flex items-center justify-between">
             <button
-              onClick={() => setMapFocusMode(false)}
+              onClick={() => { setMapFocusMode(false); setActiveRoute(null) }}
               className="text-gray-400 dark:text-gray-500 text-sm"
             >
               ← 목록
@@ -505,10 +507,12 @@ function AddDayButton({ tripId, onAdded }: { tripId: string; onAdded: () => void
 function MapController({
   selectedDayId,
   places,
+  allPlaces,
   focusedPlaceId,
 }: {
   selectedDayId: string | null
   places: Place[]
+  allPlaces: Place[]
   focusedPlaceId: string | null
 }) {
   const map = useMap()
@@ -520,10 +524,10 @@ function MapController({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDayId, map])
 
-  // 장소 클릭 시 해당 장소로 pan
+  // 장소 클릭 시 해당 장소로 pan (모든 Day에서 검색)
   useEffect(() => {
     if (!map || !focusedPlaceId) return
-    const place = places.find(p => p.id === focusedPlaceId)
+    const place = allPlaces.find(p => p.id === focusedPlaceId)
     if (place) map.panTo({ lat: place.lat, lng: place.lng })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusedPlaceId, map])

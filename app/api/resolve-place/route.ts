@@ -31,10 +31,44 @@ export async function POST(req: NextRequest) {
           address: data.result.formatted_address ?? '',
         })
       }
-    } catch { /* fallback to name search */ }
+    } catch { /* fallback */ }
   }
 
-  // 2차: CID 실패 시 이름으로 검색 (fallback)
+  // 2차: Google Maps URL을 직접 fetch해서 좌표 추출
+  if (url.includes('google.com/maps')) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible)' },
+        redirect: 'follow',
+      })
+      const html = await res.text()
+
+      // 응답 URL이나 HTML에서 @lat,lng 패턴 추출
+      const finalUrl = res.url
+      const urlCoords = finalUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+      if (urlCoords) {
+        return NextResponse.json({
+          lat: parseFloat(urlCoords[1]),
+          lng: parseFloat(urlCoords[2]),
+          name,
+          address: '',
+        })
+      }
+
+      // HTML 내 좌표 패턴 검색 (center=[lat,lng] 또는 [null,null,lat,lng])
+      const htmlCoords = html.match(/\[null,null,(-?\d+\.\d{4,}),(-?\d+\.\d{4,})\]/)
+      if (htmlCoords) {
+        return NextResponse.json({
+          lat: parseFloat(htmlCoords[1]),
+          lng: parseFloat(htmlCoords[2]),
+          name,
+          address: '',
+        })
+      }
+    } catch { /* fallback */ }
+  }
+
+  // 3차: 이름으로 검색 (최후 수단)
   try {
     const res = await fetch(
       `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(name)}&inputtype=textquery&fields=geometry,name,formatted_address&key=${apiKey}`

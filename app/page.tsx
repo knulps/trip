@@ -21,7 +21,7 @@ export default async function HomePage() {
 
   return (
     <main className="flex flex-col h-full">
-      <header className="flex items-center justify-between px-5 pt-12 pb-4">
+      <header className="flex items-center justify-between px-5 pb-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
         <h1 className="text-xl font-semibold">여행</h1>
         <Link
           href="/trip/new"
