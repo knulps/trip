@@ -1,17 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm --version)",
-      "Read(//c/knulps/private/**)",
-      "Bash(npx create-next-app@latest trip --typescript --tailwind --app --no-src-dir --no-import-alias --eslint)",
-      "Bash(mkdir -p /c/knulps/private/trip/app/trip/[id])",
-      "Bash(mkdir -p /c/knulps/private/trip/app/invite/[token])",
       "Bash(npx tsc:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git remote:*)",
       "Bash(git branch:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(npm install:*)",
+      "Bash(npx next:*)",
+      "Skill(review)"
     ]
   }
 }
