@@ -33,10 +33,11 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   const selectedDay = days.find(d => d.id === selectedDayId) ?? days[0]
   const places = selectedDay?.places ?? []
 
-  // 포커스 모드에서 표시할 장소
+  // 포커스 모드에서 표시할 장소 (모든 Day에서 검색)
+  const allPlaces = days.flatMap(d => d.places)
   const focusedPlace = focusedPlaceId
-    ? places.find(p => p.id === focusedPlaceId) ?? places[0] ?? null
-    : places[0] ?? null
+    ? allPlaces.find(p => p.id === focusedPlaceId) ?? null
+    : null
 
   // Polyline 좌표 — useMemo로 불필요한 재계산 방지
   const polylinePath = useMemo(
