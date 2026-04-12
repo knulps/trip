@@ -234,6 +234,19 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
                       · {day.places.length}개 장소
                     </span>
                   </span>
+                  {editMode && day.places.length > 0 && (
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm(`Day ${dayIndex + 1}의 장소 ${day.places.length}개를 모두 삭제할까요?`)) return
+                        const supabase = createClient()
+                        await supabase.from('places').delete().eq('day_id', day.id)
+                        onRefresh()
+                      }}
+                      className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700"
+                    >
+                      전체 삭제
+                    </button>
+                  )}
                   {!editMode && (
                     <Link
                       href={`/trip/add?dayId=${day.id}`}
