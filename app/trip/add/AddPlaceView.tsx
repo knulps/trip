@@ -21,6 +21,7 @@ function AddPlaceViewInner() {
 
   const [selected, setSelected] = useState<PlaceResult | null>(null)
   const [visitTime, setVisitTime] = useState('')
+  const [memo, setMemo] = useState('')
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const placesLib = useMapsLibrary('places')
@@ -68,6 +69,7 @@ function AddPlaceViewInner() {
       lng: selected.lng,
       address: selected.address,
       visit_time: visitTime || null,
+      memo: memo || null,
     })
 
     setSaving(false)
@@ -112,6 +114,17 @@ function AddPlaceViewInner() {
             type="time"
             value={visitTime}
             onChange={(e) => setVisitTime(e.target.value)}
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-gray-500 dark:focus:bg-gray-800"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-gray-500 dark:text-gray-400">메모 (선택)</label>
+          <textarea
+            rows={3}
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            placeholder="메모를 입력하세요"
             className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-gray-500 dark:focus:bg-gray-800"
           />
         </div>

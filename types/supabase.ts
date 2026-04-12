@@ -97,6 +97,7 @@ export type Database = {
           lng: number
           address: string
           visit_time: string | null
+          memo: string | null
           created_at: string
         }
         Insert: {
@@ -108,6 +109,7 @@ export type Database = {
           lng: number
           address: string
           visit_time?: string | null
+          memo?: string | null
           created_at?: string
         }
         Update: {
@@ -117,6 +119,7 @@ export type Database = {
           lng?: number
           address?: string
           visit_time?: string | null
+          memo?: string | null
         }
         Relationships: [
           {

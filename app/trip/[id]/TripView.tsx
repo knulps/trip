@@ -223,6 +223,13 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
             {trip.start_date} – {trip.end_date}
           </p>
         </div>
+        {/* 가져오기 */}
+        <Link
+          href={`/trip/${trip.id}/import`}
+          className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+        >
+          가져오기
+        </Link>
         {/* 초대 링크 복사 */}
         <InviteButton tripId={trip.id} inviteToken={trip.invite_token} />
       </header>

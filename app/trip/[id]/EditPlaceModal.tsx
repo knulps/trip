@@ -13,6 +13,7 @@ interface Props {
 export default function EditPlaceModal({ place, onClose, onSave }: Props) {
   const [name, setName] = useState(place.name)
   const [visitTime, setVisitTime] = useState(place.visit_time?.slice(0, 5) ?? '')
+  const [memo, setMemo] = useState(place.memo ?? '')
   const [saving, setSaving] = useState(false)
 
   const [keyboardHeight, setKeyboardHeight] = useState(0)
@@ -36,7 +37,7 @@ export default function EditPlaceModal({ place, onClose, onSave }: Props) {
     setSaving(true)
     await supabase
       .from('places')
-      .update({ name, visit_time: visitTime || null })
+      .update({ name, visit_time: visitTime || null, memo: memo || null })
       .eq('id', place.id)
     setSaving(false)
     onSave()
@@ -69,7 +70,7 @@ export default function EditPlaceModal({ place, onClose, onSave }: Props) {
           />
         </div>
 
-        <div className="mb-6 flex flex-col gap-1.5">
+        <div className="mb-4 flex flex-col gap-1.5">
           <label className="text-xs font-medium text-gray-500 dark:text-gray-400">
             방문 시간
           </label>
@@ -77,6 +78,18 @@ export default function EditPlaceModal({ place, onClose, onSave }: Props) {
             type="time"
             value={visitTime}
             onChange={(e) => setVisitTime(e.target.value)}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500"
+          />
+        </div>
+
+        <div className="mb-6 flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-gray-500 dark:text-gray-400">
+            메모
+          </label>
+          <textarea
+            rows={3}
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500"
           />
         </div>

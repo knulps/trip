@@ -58,6 +58,9 @@ function PlaceItem({
           {place.visit_time && <span className="mr-1">{place.visit_time.slice(0, 5)}</span>}
           {place.address}
         </p>
+        {place.memo && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{place.memo}</p>
+        )}
       </div>
       <button
         onClick={() => onFocus?.(place)}
