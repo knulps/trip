@@ -301,7 +301,6 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           mapId="trip-map"
           disableDefaultUI
           gestureHandling="greedy"
-          colorScheme="LIGHT"
           onClick={(e) => {
             if (!e.detail?.placeId && allPlaces.length > 0) {
               setMapFocusMode(true)
