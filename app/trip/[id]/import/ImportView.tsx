@@ -144,6 +144,20 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
     const supabase = createClient()
     const toImport = parsedPlaces.filter(p => p.selected && p.resolved && p.lat != null)
 
+    // 기존 장소 이름 조회 (중복 스킵용)
+    const { data: existingPlaces } = await supabase
+      .from('places')
+      .select('name')
+      .eq('day_id', selectedDayId)
+
+    const existingNames = new Set((existingPlaces ?? []).map(p => p.name))
+    const filtered = toImport.filter(p => !existingNames.has(p.name))
+    const skipped = toImport.length - filtered.length
+
+    if (skipped > 0) {
+      alert(`중복 ${skipped}개 스킵, ${filtered.length}개 가져옵니다.`)
+    }
+
     // Get current last order_key for the day
     const { data: lastPlaces } = await supabase
       .from('places')
@@ -154,7 +168,7 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
 
     let lastKey = lastPlaces?.[0]?.order_key ?? null
 
-    for (const place of toImport) {
+    for (const place of filtered) {
       const newKey = generateKeyBetween(lastKey, null)
       await supabase.from('places').insert({
         day_id: selectedDayId,
