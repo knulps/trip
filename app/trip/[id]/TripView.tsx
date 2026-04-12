@@ -22,6 +22,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [mapFocusMode, setMapFocusMode] = useState(false)
+  const [editingPlace, setEditingPlace] = useState<Place | null>(null)
   const [activeRoute, setActiveRoute] = useState<{
     encodedPolyline: string
     mode: string
@@ -361,6 +362,13 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
               {/* 장소 헤더 + 아이콘 */}
               <div className="flex items-center gap-3 py-2">
                 <p className="flex-1 text-sm font-semibold">{focusedPlace.name}</p>
+                <button
+                  onClick={() => setEditingPlace(focusedPlace)}
+                  className="shrink-0 text-gray-300 transition-colors hover:text-gray-500 active:text-gray-700 dark:text-gray-600 dark:hover:text-gray-400"
+                  aria-label="수정"
+                >
+                  ✏️
+                </button>
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${focusedPlace.lat},${focusedPlace.lng}`}
                   target="_blank"
@@ -383,12 +391,12 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
 
               {/* 상세 정보 */}
               <div className="flex flex-col gap-1.5 pb-2 text-xs text-gray-500 dark:text-gray-400">
-                <p>{focusedPlace.address}</p>
+                <p>📫 {focusedPlace.address}</p>
                 {focusedPlace.visit_time && (
-                  <p>방문 시간: {focusedPlace.visit_time.slice(0, 5)}</p>
+                  <p>🕐 {focusedPlace.visit_time.slice(0, 5)}</p>
                 )}
                 {focusedPlace.memo && (
-                  <p className="whitespace-pre-wrap">{focusedPlace.memo}</p>
+                  <p className="whitespace-pre-wrap">📝 {focusedPlace.memo}</p>
                 )}
               </div>
 
@@ -426,6 +434,13 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
             dayRefs={dayRefs}
           />
         </div>
+      )}
+      {editingPlace && (
+        <EditPlaceModal
+          place={editingPlace}
+          onClose={() => setEditingPlace(null)}
+          onSave={refreshDays}
+        />
       )}
     </div>
     </APIProvider>
