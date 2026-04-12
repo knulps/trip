@@ -1,19 +1,22 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { Place } from '@/types/supabase'
+import type { Place, Day } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
+import { generateKeyBetween } from 'fractional-indexing'
 
 interface Props {
   place: Place
+  days?: Day[]
   onClose: () => void
   onSave: () => void
 }
 
-export default function EditPlaceModal({ place, onClose, onSave }: Props) {
+export default function EditPlaceModal({ place, days, onClose, onSave }: Props) {
   const [name, setName] = useState(place.name)
   const [visitTime, setVisitTime] = useState(place.visit_time?.slice(0, 5) ?? '')
   const [memo, setMemo] = useState(place.memo ?? '')
+  const [selectedDayId, setSelectedDayId] = useState(place.day_id)
   const [saving, setSaving] = useState(false)
 
   const [keyboardHeight, setKeyboardHeight] = useState(0)
@@ -32,13 +35,40 @@ export default function EditPlaceModal({ place, onClose, onSave }: Props) {
   }, [])
 
   const supabase = createClient()
+  const dayChanged = selectedDayId !== place.day_id
 
   async function handleSave() {
     setSaving(true)
-    await supabase
-      .from('places')
-      .update({ name, visit_time: visitTime || null, memo: memo || null })
-      .eq('id', place.id)
+
+    if (dayChanged) {
+      // 새 Day의 마지막 order_key 조회
+      const { data: lastPlaces } = await supabase
+        .from('places')
+        .select('order_key')
+        .eq('day_id', selectedDayId)
+        .order('order_key', { ascending: false })
+        .limit(1)
+
+      const lastKey = lastPlaces?.[0]?.order_key ?? null
+      const newKey = generateKeyBetween(lastKey, null)
+
+      await supabase
+        .from('places')
+        .update({
+          name,
+          visit_time: visitTime || null,
+          memo: memo || null,
+          day_id: selectedDayId,
+          order_key: newKey,
+        })
+        .eq('id', place.id)
+    } else {
+      await supabase
+        .from('places')
+        .update({ name, visit_time: visitTime || null, memo: memo || null })
+        .eq('id', place.id)
+    }
+
     setSaving(false)
     onSave()
     onClose()
@@ -69,6 +99,30 @@ export default function EditPlaceModal({ place, onClose, onSave }: Props) {
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500"
           />
         </div>
+
+        {days && days.length > 1 && (
+          <div className="mb-4 flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">
+              날짜 이동
+            </label>
+            <select
+              value={selectedDayId}
+              onChange={(e) => setSelectedDayId(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500"
+            >
+              {days.map((day, i) => {
+                const date = new Date(day.date + 'T00:00:00')
+                const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
+                return (
+                  <option key={day.id} value={day.id}>
+                    Day {i + 1} - {date.getMonth() + 1}/{date.getDate()} {dayOfWeek}
+                    {day.id === place.day_id ? ' (현재)' : ''}
+                  </option>
+                )
+              })}
+            </select>
+          </div>
+        )}
 
         <div className="mb-4 flex flex-col gap-1.5">
           <label className="text-xs font-medium text-gray-500 dark:text-gray-400">
@@ -106,7 +160,7 @@ export default function EditPlaceModal({ place, onClose, onSave }: Props) {
             disabled={saving}
             className="flex-1 rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
           >
-            {saving ? '저장 중...' : '저장'}
+            {saving ? '저장 중...' : dayChanged ? '이동 + 저장' : '저장'}
           </button>
         </div>
       </div>

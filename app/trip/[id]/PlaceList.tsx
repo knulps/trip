@@ -290,6 +290,7 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
       {editingPlace && (
         <EditPlaceModal
           place={editingPlace}
+          days={days}
           onClose={() => setEditingPlace(null)}
           onSave={onRefresh}
         />

@@ -440,6 +440,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
       {editingPlace && (
         <EditPlaceModal
           place={editingPlace}
+          days={days}
           onClose={() => setEditingPlace(null)}
           onSave={refreshDays}
         />
