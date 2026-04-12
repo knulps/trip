@@ -22,9 +22,14 @@ body {
     color: #f9fafb;
   }
 
-  /* Google Maps InfoWindow 팝업 텍스트 다크모드 강제 오버라이드 */
+  /* Google Maps 다크모드 강제 오버라이드 */
   .gm-style-iw,
-  .gm-style-iw * {
+  .gm-style-iw *,
+  .gm-style * {
     color: #1f2937 !important;
+  }
+  .gm-style span[style*="background-color"],
+  .gm-style div[style*="background-color"] {
+    background-color: transparent !important;
   }
 }
