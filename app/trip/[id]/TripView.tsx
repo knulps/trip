@@ -288,7 +288,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
       {/* 지도 — 단일 인스턴스, 높이만 변경 */}
       <div
         style={{
-          height: mapFocusMode ? '75dvh' : '35dvh',
+          height: mapFocusMode ? '55dvh' : '35dvh',
           transition: 'height 0.3s ease',
         }}
         className="dark:bg-gray-900"
@@ -317,13 +317,13 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
               <AdvancedMarker
                 key={place.id}
                 position={{ lat: place.lat, lng: place.lng }}
-                onClick={() => {
-                  setFocusedPlaceId(place.id)
-                  setMapFocusMode(true)
-                }}
               >
                 <div
-                  className={`flex items-center justify-center rounded-full font-bold text-white shadow transition-all ${
+                  onClick={() => {
+                    setFocusedPlaceId(place.id)
+                    setMapFocusMode(true)
+                  }}
+                  className={`flex items-center justify-center rounded-full font-bold text-white shadow transition-all cursor-pointer ${
                     isFocused
                       ? 'h-8 w-8 bg-blue-600 text-xs'
                       : 'h-6 w-6 bg-gray-900 text-[10px]'
@@ -345,8 +345,9 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
 
       {/* 포커스 모드: 하단 장소 카드 / 일반 모드: 장소 리스트 */}
       {mapFocusMode ? (
-        <div className="flex-1 overflow-hidden">
-          <div className="px-4 py-3 flex items-center justify-between border-t border-gray-100 dark:border-gray-800">
+        <div className="flex-1 overflow-y-auto border-t border-gray-100 dark:border-gray-800">
+          {/* 헤더 */}
+          <div className="px-4 py-2 flex items-center justify-between">
             <button
               onClick={() => setMapFocusMode(false)}
               className="text-gray-400 dark:text-gray-500 text-sm"
@@ -355,17 +356,46 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
             </button>
           </div>
           {focusedPlace && (
-            <div className="px-4 py-3">
-              <p className="text-sm font-medium text-gray-900 dark:text-white">{focusedPlace.name}</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500">{focusedPlace.address}</p>
+            <div className="px-4">
+              {/* PlaceItem 스타일 */}
+              <div className="flex items-center gap-3 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{focusedPlace.name}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                    {focusedPlace.visit_time && <span className="mr-1">{focusedPlace.visit_time.slice(0, 5)}</span>}
+                    {focusedPlace.address}
+                  </p>
+                  {focusedPlace.memo && (
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{focusedPlace.memo}</p>
+                  )}
+                </div>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${focusedPlace.lat},${focusedPlace.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-gray-300 transition-colors hover:text-blue-400 active:text-blue-600 dark:text-gray-600 dark:hover:text-blue-400"
+                  aria-label="지도에서 보기"
+                >
+                  📍
+                </a>
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${focusedPlace.lat},${focusedPlace.lng}&travelmode=transit`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-gray-300 transition-colors hover:text-green-400 active:text-green-600 dark:text-gray-600 dark:hover:text-green-400"
+                  aria-label="길찾기"
+                >
+                  ↗
+                </a>
+              </div>
 
+              {/* 현위치 거리 */}
               <button
                 onClick={requestCurrentLocation}
-                className="mt-2 text-xs text-blue-600 dark:text-blue-400"
+                className="text-xs text-blue-600 dark:text-blue-400 py-1"
               >
                 📍 현위치에서 거리 확인
               </button>
-
               {currentLocation && (
                 <CurrentLocationDistance
                   from={currentLocation}
@@ -377,17 +407,6 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                   )}
                 />
               )}
-
-              <div className="flex gap-2 mt-2">
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${focusedPlace.lat},${focusedPlace.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-blue-600 dark:text-blue-400"
-                >
-                  길찾기 ↗
-                </a>
-              </div>
             </div>
           )}
         </div>
