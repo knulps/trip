@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps'
 import type { Trip, Day } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import { generateKeyBetween } from 'fractional-indexing'
@@ -42,7 +41,6 @@ function parseCSVLine(line: string): string[] {
 
 function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
   const router = useRouter()
-  const placesLib = useMapsLibrary('places')
 
   const [parsedPlaces, setParsedPlaces] = useState<ParsedPlace[]>([])
   const [selectedDayId, setSelectedDayId] = useState<string>(days[0]?.id ?? '')
@@ -93,16 +91,14 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
     reader.readAsText(f, 'UTF-8')
   }
 
-  // 선택된 항목 중 미해석만 좌표 검색
+  // 선택된 항목의 좌표 검색 (URL의 CID로 정확한 장소 조회)
   async function resolveSelected() {
-    if (!placesLib) return
     const toResolve = parsedPlaces.filter(p => p.selected && !p.resolved && !p.added)
     if (toResolve.length === 0) return
 
     setResolving(true)
     setProgress({ current: 0, total: toResolve.length })
 
-    const service = new placesLib.PlacesService(document.createElement('div'))
     const updated = [...parsedPlaces]
 
     let count = 0
@@ -113,29 +109,20 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
       setProgress({ current: count, total: toResolve.length })
 
       try {
-        const result = await new Promise<google.maps.places.PlaceResult | null>((resolve) => {
-          service.findPlaceFromQuery(
-            {
-              query: updated[i].name,
-              fields: ['geometry', 'formatted_address', 'name'],
-            },
-            (results, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && results?.[0]) {
-                resolve(results[0])
-              } else {
-                resolve(null)
-              }
-            }
-          )
+        const res = await fetch('/api/resolve-place', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: updated[i].url, name: updated[i].name }),
         })
 
-        if (result?.geometry?.location) {
+        if (res.ok) {
+          const data = await res.json() as { lat: number; lng: number; name: string; address: string }
           updated[i] = {
             ...updated[i],
-            lat: result.geometry.location.lat(),
-            lng: result.geometry.location.lng(),
-            address: result.formatted_address ?? '',
-            name: result.name ?? updated[i].name,
+            lat: data.lat,
+            lng: data.lng,
+            address: data.address,
+            name: data.name,
             resolved: true,
           }
         } else {
@@ -350,9 +337,5 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
 }
 
 export default function ImportView({ trip, days }: { trip: Trip; days: Day[] }) {
-  return (
-    <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
-      <ImportViewInner trip={trip} days={days} />
-    </APIProvider>
-  )
+  return <ImportViewInner trip={trip} days={days} />
 }
