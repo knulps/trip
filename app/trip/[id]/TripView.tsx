@@ -316,6 +316,10 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
               <AdvancedMarker
                 key={place.id}
                 position={{ lat: place.lat, lng: place.lng }}
+                onClick={() => {
+                  setFocusedPlaceId(place.id)
+                  setMapFocusMode(true)
+                }}
               >
                 <div
                   className={`flex items-center justify-center rounded-full font-bold text-white shadow transition-all ${
@@ -351,7 +355,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           </div>
           {focusedPlace && (
             <div className="px-4 py-3">
-              <p className="text-sm font-medium text-gray-900 dark:text-amber-400">{focusedPlace.name}</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{focusedPlace.name}</p>
               <p className="text-xs text-gray-400 dark:text-gray-500">{focusedPlace.address}</p>
 
               <button
