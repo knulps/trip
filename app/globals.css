@@ -12,6 +12,10 @@
   --sar: env(safe-area-inset-right);
 }
 
+html {
+  color-scheme: light only;
+}
+
 body {
   font-family: Arial, Helvetica, sans-serif;
 }

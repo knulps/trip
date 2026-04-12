@@ -36,7 +36,7 @@ export default function RootLayout({
       <head>
         <link rel="apple-touch-icon" href="/icon.svg" />
       </head>
-      <body className="h-full bg-white text-gray-900">
+      <body className="h-full bg-white text-gray-900" style={{ colorScheme: 'light' }}>
         {children}
         <script
           dangerouslySetInnerHTML={{
