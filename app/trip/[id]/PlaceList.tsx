@@ -155,6 +155,7 @@ function DraggableDayPlaces({
   )
 
   const deletePlace = useCallback(async (id: string) => {
+    if (!window.confirm('이 장소를 삭제할까요?')) return
     await supabase.from('places').delete().eq('id', id)
     onRefresh()
   }, [supabase, onRefresh])
