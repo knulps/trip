@@ -26,6 +26,15 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   const [activeRoute, setActiveRoute] = useState<{
     encodedPolyline: string
     mode: string
+    transitSteps?: Array<{
+      vehicle: string
+      lineName: string
+      lineShort: string
+      color: string
+      departureStop: string
+      arrivalStop: string
+      stopCount: number
+    }>
   } | null>(null)
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
 
@@ -131,9 +140,24 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
         }),
       })
       if (!res.ok) return
-      const data = await res.json() as { encodedPolyline?: string }
+      const data = await res.json() as {
+        encodedPolyline?: string
+        transitSteps?: Array<{
+          vehicle: string
+          lineName: string
+          lineShort: string
+          color: string
+          departureStop: string
+          arrivalStop: string
+          stopCount: number
+        }>
+      }
       if (data.encodedPolyline) {
-        setActiveRoute({ encodedPolyline: data.encodedPolyline, mode })
+        setActiveRoute({
+          encodedPolyline: data.encodedPolyline,
+          mode,
+          transitSteps: data.transitSteps,
+        })
       }
     } catch { /* ignore */ }
   }
@@ -346,6 +370,14 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           )}
         </Map>
       </div>
+
+      {/* 대중교통 경로 상세 */}
+      {activeRoute?.transitSteps && activeRoute.transitSteps.length > 0 && (
+        <TransitStepsBar
+          steps={activeRoute.transitSteps}
+          onDismiss={() => setActiveRoute(null)}
+        />
+      )}
 
       {/* 포커스 모드: 하단 장소 카드 / 일반 모드: 장소 리스트 */}
       {mapFocusMode ? (
@@ -582,6 +614,76 @@ function RoutePolyline({ encodedPolyline, mode }: { encodedPolyline: string; mod
   }, [map, geometryLib, encodedPolyline, mode])
 
   return null
+}
+
+// 대중교통 경로 상세 바
+function TransitStepsBar({
+  steps,
+  onDismiss,
+}: {
+  steps: Array<{
+    vehicle: string
+    lineName: string
+    lineShort: string
+    color: string
+    departureStop: string
+    arrivalStop: string
+    stopCount: number
+  }>
+  onDismiss: () => void
+}) {
+  const vehicleEmoji: Record<string, string> = {
+    SUBWAY: '\u{1F687}',
+    BUS: '\u{1F68C}',
+    RAIL: '\u{1F686}',
+    TRAM: '\u{1F68A}',
+    COMMUTER_TRAIN: '\u{1F686}',
+    HIGH_SPEED_TRAIN: '\u{1F685}',
+    HEAVY_RAIL: '\u{1F686}',
+    LONG_DISTANCE_TRAIN: '\u{1F686}',
+  }
+
+  const firstDeparture = steps[0]?.departureStop
+  const lastArrival = steps[steps.length - 1]?.arrivalStop
+
+  return (
+    <div className="border-t border-b border-gray-100 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-900">
+      <div className="flex items-center gap-2">
+        <div className="flex-1 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-1 text-xs whitespace-nowrap">
+            {firstDeparture && (
+              <span className="text-gray-400 text-[10px] mr-1">{firstDeparture}</span>
+            )}
+            {steps.map((step, i) => {
+              const emoji = vehicleEmoji[step.vehicle] ?? '\u{1F68C}'
+              const label = step.lineShort || step.lineName
+              return (
+                <span key={i} className="contents">
+                  {i > 0 && <span className="text-gray-300 mx-0.5">{'\u2192'}</span>}
+                  <span
+                    className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-white text-[11px] font-medium"
+                    style={{ backgroundColor: step.color }}
+                  >
+                    {emoji} {label} {'\u00B7'} {step.stopCount}{'\uC815\uAC70\uC7A5'}
+                  </span>
+                </span>
+              )
+            })}
+            {lastArrival && (
+              <span className="text-gray-400 text-[10px] ml-1">{lastArrival}</span>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={onDismiss}
+          className="shrink-0 text-gray-400 hover:text-gray-600 text-sm px-1"
+          aria-label="닫기"
+        >
+          {'\u2715'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 // 현위치에서 장소까지 거리
