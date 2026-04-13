@@ -46,6 +46,11 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     originPlaceId?: string
     destinationPlaceId?: string
   } | null>(null)
+  const [clickedPoi, setClickedPoi] = useState<{
+    placeId: string
+    name: string
+    address: string
+  } | null>(null)
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
 
   const dayRefs = useRef<globalThis.Map<string, HTMLDivElement>>(new globalThis.Map())
@@ -340,8 +345,12 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           mapId="trip-map"
           disableDefaultUI
           gestureHandling="greedy"
-          clickableIcons={false}
-          onClick={() => {
+          clickableIcons={true}
+          onClick={(e) => {
+            // POI 클릭은 MapPOIHandler가 처리
+            if (e.detail.placeId) return
+            // 빈 지도 클릭 시 POI 카드 닫기
+            setClickedPoi(null)
             if (allPlaces.length > 0) {
               setMapFocusMode(true)
               if (!focusedPlaceId) setFocusedPlaceId(allPlaces[0].id)
@@ -354,6 +363,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
             allPlaces={allPlaces}
             focusedPlaceId={focusedPlaceId}
           />
+          <MapPOIHandler onPoiClick={setClickedPoi} />
           {places.map((place, i) => {
             const isFocused = place.id === focusedPlaceId
             return (
@@ -363,6 +373,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
               >
                 <div
                   onClick={() => {
+                    setClickedPoi(null)
                     setFocusedPlaceId(place.id)
                     setMapFocusMode(true)
                   }}
@@ -398,6 +409,35 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           )}
         </Map>
       </div>
+
+      {/* POI 정보 카드 */}
+      {clickedPoi && (
+        <div className="border-t border-gray-100 bg-white px-4 py-3 flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900 truncate">{clickedPoi.name}</p>
+            {clickedPoi.address && (
+              <p className="text-xs text-gray-500 truncate mt-0.5">{clickedPoi.address}</p>
+            )}
+          </div>
+          <div className="shrink-0 flex items-center gap-2">
+            <a
+              href={`https://www.google.com/maps/place/?q=place_id:${clickedPoi.placeId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-100 active:bg-blue-200"
+            >
+              구글맵 ↗
+            </a>
+            <button
+              onClick={() => setClickedPoi(null)}
+              className="text-gray-400 hover:text-gray-600 text-sm px-1"
+              aria-label="닫기"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 대중교통 경로 상세 */}
       {activeRoute?.routeSegments && activeRoute.routeSegments.length > 0 && (
@@ -679,6 +719,46 @@ function RoutePolyline({ encodedPolyline, mode }: { encodedPolyline: string; mod
 
     return () => polyline.setMap(null)
   }, [map, geometryLib, encodedPolyline, mode])
+
+  return null
+}
+
+// 지도 POI 클릭 핸들러
+function MapPOIHandler({
+  onPoiClick,
+}: {
+  onPoiClick: (poi: { placeId: string; name: string; address: string }) => void
+}) {
+  const map = useMap()
+  const placesLib = useMapsLibrary('places')
+  const onPoiClickRef = useRef(onPoiClick)
+  onPoiClickRef.current = onPoiClick
+
+  useEffect(() => {
+    if (!map || !placesLib) return
+    const service = new placesLib.PlacesService(map)
+
+    const listener = map.addListener('click', (e: google.maps.IconMouseEvent) => {
+      if (!e.placeId) return
+      e.stop()
+      service.getDetails(
+        { placeId: e.placeId, fields: ['name', 'formatted_address'] },
+        (result, status) => {
+          if (status === placesLib.PlacesServiceStatus.OK && result) {
+            onPoiClickRef.current({
+              placeId: e.placeId!,
+              name: result.name ?? '',
+              address: result.formatted_address ?? '',
+            })
+          }
+        }
+      )
+    })
+
+    return () => {
+      google.maps.event.removeListener(listener)
+    }
+  }, [map, placesLib])
 
   return null
 }
