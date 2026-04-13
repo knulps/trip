@@ -301,8 +301,9 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           mapId="trip-map"
           disableDefaultUI
           gestureHandling="greedy"
-          onClick={(e) => {
-            if (!e.detail?.placeId && allPlaces.length > 0) {
+          clickableIcons={false}
+          onClick={() => {
+            if (allPlaces.length > 0) {
               setMapFocusMode(true)
               if (!focusedPlaceId) setFocusedPlaceId(allPlaces[0].id)
             }
