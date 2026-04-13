@@ -421,7 +421,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           </div>
           <div className="shrink-0 flex items-center gap-2">
             <a
-              href={`https://www.google.com/maps/place/?q=place_id:${clickedPoi.placeId}`}
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(clickedPoi.name)}&query_place_id=${clickedPoi.placeId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-0.5 rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-100 active:bg-blue-200"
