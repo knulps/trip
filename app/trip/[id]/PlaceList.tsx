@@ -31,8 +31,9 @@ interface Props {
   editMode: boolean
   onRefresh: () => void
   onFocusPlace?: (place: Place) => void
-  onSelectRoute?: (origin: { lat: number; lng: number }, destination: { lat: number; lng: number }, mode: string) => void
+  onSelectRoute?: (origin: { lat: number; lng: number }, destination: { lat: number; lng: number }, mode: string, fromPlaceId?: string, toPlaceId?: string) => void
   dayRefs: React.RefObject<globalThis.Map<string, HTMLDivElement>>
+  activeRoutePlaceIds?: { from: string; to: string } | null
 }
 
 /* ── PlaceItem: non-edit mode ── */
@@ -41,14 +42,21 @@ function PlaceItem({
   index,
   onEdit,
   onFocus,
+  isRouteOrigin,
+  isRouteDest,
 }: {
   place: Place
   index: number
   onEdit: (place: Place) => void
   onFocus?: (place: Place) => void
+  isRouteOrigin?: boolean
+  isRouteDest?: boolean
 }) {
   return (
-    <li className="flex items-center gap-3 py-3">
+    <li className={`flex items-center gap-3 py-3 transition-all ${
+      isRouteOrigin ? 'border-l-4 border-green-500 pl-2 -ml-2' :
+      isRouteDest ? 'border-l-4 border-red-500 pl-2 -ml-2' : ''
+    }`}>
       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white">
         {index + 1}
       </span>
@@ -197,7 +205,7 @@ function DraggableDayPlaces({
 }
 
 /* ── Main PlaceList ── */
-export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onSelectRoute, dayRefs }: Props) {
+export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onSelectRoute, dayRefs, activeRoutePlaceIds }: Props) {
   const [editingPlace, setEditingPlace] = useState<Place | null>(null)
 
   if (days.length === 0) {
@@ -274,6 +282,8 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
                         index={i}
                         onEdit={setEditingPlace}
                         onFocus={onFocusPlace}
+                        isRouteOrigin={activeRoutePlaceIds?.from === place.id}
+                        isRouteDest={activeRoutePlaceIds?.to === place.id}
                       />
                       {i < day.places.length - 1 && (
                         <DistanceBadge from={place} to={day.places[i + 1]} onSelectRoute={onSelectRoute} />

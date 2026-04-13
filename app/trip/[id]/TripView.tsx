@@ -43,6 +43,8 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     routeSegments?: RouteSegment[]
     origin?: { lat: number; lng: number }
     destination?: { lat: number; lng: number }
+    originPlaceId?: string
+    destinationPlaceId?: string
   } | null>(null)
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
 
@@ -134,7 +136,9 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   async function handleSelectRoute(
     origin: { lat: number; lng: number },
     destination: { lat: number; lng: number },
-    mode: string
+    mode: string,
+    fromPlaceId?: string,
+    toPlaceId?: string
   ) {
     try {
       const res = await fetch('/api/route', {
@@ -160,6 +164,8 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           routeSegments: data.routeSegments,
           origin,
           destination,
+          originPlaceId: fromPlaceId,
+          destinationPlaceId: toPlaceId,
         })
       } else if (data.encodedPolyline) {
         setActiveRoute({
@@ -167,6 +173,8 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           mode,
           origin,
           destination,
+          originPlaceId: fromPlaceId,
+          destinationPlaceId: toPlaceId,
         })
       } else {
         setActiveRoute(null)
@@ -495,6 +503,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
             }}
             onSelectRoute={handleSelectRoute}
             dayRefs={dayRefs}
+            activeRoutePlaceIds={activeRoute?.originPlaceId && activeRoute?.destinationPlaceId ? { from: activeRoute.originPlaceId, to: activeRoute.destinationPlaceId } : null}
           />
         </div>
       )}
@@ -665,22 +674,53 @@ function TransitRouteSegments({ segments }: { segments: RouteSegment[] }) {
       const path = geometryLib.encoding.decodePath(seg.encodedPolyline)
       path.forEach(p => bounds.extend(p))
 
-      const polyline = new google.maps.Polyline({
-        path,
-        geodesic: true,
-        strokeColor: seg.type === 'TRANSIT' ? (seg.color || '#2563eb') : undefined,
-        strokeOpacity: seg.type === 'TRANSIT' ? 0.9 : 0,
-        strokeWeight: seg.type === 'TRANSIT' ? 4 : 3,
-        ...(seg.type === 'WALK' && {
+      if (seg.type === 'TRANSIT') {
+        // 외곽선 polyline (뒤)
+        const outline = new google.maps.Polyline({
+          path,
+          geodesic: true,
+          strokeColor: '#000000',
+          strokeOpacity: 0.18,
+          strokeWeight: 7,
+          zIndex: 1,
+        })
+        outline.setMap(map)
+        polylines.push(outline)
+
+        // 컬러 polyline (앞)
+        const colorLine = new google.maps.Polyline({
+          path,
+          geodesic: true,
+          strokeColor: seg.color || '#2563eb',
+          strokeOpacity: 0.9,
+          strokeWeight: 4,
+          zIndex: 2,
+        })
+        colorLine.setMap(map)
+        polylines.push(colorLine)
+      } else {
+        // WALK: 원형 점선
+        const walkLine = new google.maps.Polyline({
+          path,
+          geodesic: true,
+          strokeOpacity: 0,
+          strokeWeight: 3,
           icons: [{
-            icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4, strokeColor: '#1d4ed8' },
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              fillColor: '#1d4ed8',
+              fillOpacity: 1,
+              strokeColor: 'white',
+              strokeWeight: 2,
+              scale: 4,
+            },
             offset: '0',
-            repeat: '12px',
+            repeat: '14px',
           }],
-        }),
-      })
-      polyline.setMap(map)
-      polylines.push(polyline)
+        })
+        walkLine.setMap(map)
+        polylines.push(walkLine)
+      }
     }
 
     map.fitBounds(bounds, 50)
