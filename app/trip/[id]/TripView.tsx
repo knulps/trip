@@ -268,7 +268,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     <div className="flex flex-col h-full">
       {/* 헤더 */}
       <header className="flex items-center gap-3 px-4 pb-2" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
-        <Link href="/" className="text-gray-400">
+        <Link href="/" className="flex h-8 w-8 items-center justify-center text-xl text-gray-400">
           ‹
         </Link>
         <div className="flex-1 min-w-0">
