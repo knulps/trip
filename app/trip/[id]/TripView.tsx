@@ -701,20 +701,43 @@ function RoutePolyline({ encodedPolyline, mode }: { encodedPolyline: string; mod
     if (!map || !geometryLib || !encodedPolyline) return
 
     const path = geometryLib.encoding.decodePath(encodedPolyline)
-    const color = mode === 'TRANSIT' ? '#2563eb' : mode === 'DRIVE' ? '#f59e0b' : '#10b981'
-
-    const polyline = new google.maps.Polyline({
-      path,
-      geodesic: true,
-      strokeColor: color,
-      strokeOpacity: 0.8,
-      strokeWeight: 4,
-    })
-
-    polyline.setMap(map)
 
     const bounds = new google.maps.LatLngBounds()
     path.forEach(p => bounds.extend(p))
+
+    let polyline: google.maps.Polyline
+
+    if (mode === 'WALK') {
+      polyline = new google.maps.Polyline({
+        path,
+        geodesic: true,
+        strokeOpacity: 0,
+        strokeWeight: 3,
+        icons: [{
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            fillColor: '#1d4ed8',
+            fillOpacity: 1,
+            strokeColor: 'white',
+            strokeWeight: 2,
+            scale: 4,
+          },
+          offset: '0',
+          repeat: '14px',
+        }],
+      })
+    } else {
+      const color = mode === 'DRIVE' ? '#f59e0b' : '#2563eb'
+      polyline = new google.maps.Polyline({
+        path,
+        geodesic: true,
+        strokeColor: color,
+        strokeOpacity: 0.8,
+        strokeWeight: 4,
+      })
+    }
+
+    polyline.setMap(map)
     map.fitBounds(bounds, 50)
 
     return () => polyline.setMap(null)

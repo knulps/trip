@@ -54,5 +54,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 })
   }
 
-  return NextResponse.json({ results: validResults })
+  // 도보 10분 미만이고 대중교통이 도보보다 느리면 대중교통 제거
+  const walkResult = validResults.find(r => r?.mode === 'WALK')
+  const filteredResults = walkResult && walkResult.minutes < 10
+    ? validResults.filter(r => !(r?.mode === 'TRANSIT' && r.minutes >= walkResult.minutes))
+    : validResults
+
+  return NextResponse.json({ results: filteredResults })
 }
