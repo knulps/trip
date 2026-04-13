@@ -714,18 +714,29 @@ function TransitStepsBar({
 
   return (
     <div className="border-t border-b border-gray-100 bg-white px-3 py-2">
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
+      {/* 출발 → 도착 헤더 */}
+      {(firstDeparture || lastArrival) && (
+        <div className="flex items-center gap-1 mb-1.5">
           {firstDeparture && (
-            <p className="text-gray-400 text-[10px] mb-1">{firstDeparture}</p>
+            <span className="text-xs font-semibold text-gray-800 truncate">{firstDeparture}</span>
           )}
+          {firstDeparture && lastArrival && (
+            <span className="text-gray-400 text-xs shrink-0">{'\u2192'}</span>
+          )}
+          {lastArrival && (
+            <span className="text-xs font-semibold text-gray-800 truncate">{lastArrival}</span>
+          )}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-1 text-xs">
             {segments.map((seg, i) => {
               if (seg.type === 'WALK') {
                 return (
                   <span key={i} className="contents">
                     {i > 0 && <span className="text-gray-300 mx-0.5">{'\u2192'}</span>}
-                    <span className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 bg-gray-200 text-gray-600 text-[11px] font-medium">
+                    <span className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 bg-gray-100 text-gray-500 text-[11px] font-medium">
                       {'\u{1F6B6}'} {'\uB3C4\uBCF4'}
                     </span>
                   </span>
@@ -746,9 +757,6 @@ function TransitStepsBar({
               )
             })}
           </div>
-          {lastArrival && (
-            <p className="text-gray-400 text-[10px] mt-1">{lastArrival}</p>
-          )}
         </div>
         <button
           onClick={onDismiss}
