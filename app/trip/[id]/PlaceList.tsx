@@ -70,7 +70,7 @@ function PlaceItem({
         📍
       </button>
       <a
-        href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}&travelmode=transit`}
+        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(place.name + ' ' + place.address)}&travelmode=transit`}
         target="_blank"
         rel="noopener noreferrer"
         className="shrink-0 text-gray-300 transition-colors hover:text-green-400 active:text-green-600"

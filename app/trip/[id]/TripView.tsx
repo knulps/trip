@@ -41,6 +41,8 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     encodedPolyline?: string
     mode: string
     routeSegments?: RouteSegment[]
+    origin?: { lat: number; lng: number }
+    destination?: { lat: number; lng: number }
   } | null>(null)
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
 
@@ -156,11 +158,15 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
         setActiveRoute({
           mode,
           routeSegments: data.routeSegments,
+          origin,
+          destination,
         })
       } else if (data.encodedPolyline) {
         setActiveRoute({
           encodedPolyline: data.encodedPolyline,
           mode,
+          origin,
+          destination,
         })
       } else {
         setActiveRoute(null)
@@ -379,6 +385,16 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           {activeRoute?.encodedPolyline && (
             <RoutePolyline encodedPolyline={activeRoute.encodedPolyline} mode={activeRoute.mode} />
           )}
+          {activeRoute?.origin && (
+            <AdvancedMarker position={activeRoute.origin}>
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-white text-[10px] font-bold shadow-md">출</div>
+            </AdvancedMarker>
+          )}
+          {activeRoute?.destination && (
+            <AdvancedMarker position={activeRoute.destination}>
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-[10px] font-bold shadow-md">도</div>
+            </AdvancedMarker>
+          )}
         </Map>
       </div>
 
@@ -415,7 +431,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                   ✏️
                 </button>
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${focusedPlace.lat},${focusedPlace.lng}`}
+                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(focusedPlace.name + ' ' + focusedPlace.address)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="shrink-0 text-gray-300 transition-colors hover:text-blue-400 active:text-blue-600"
@@ -424,7 +440,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                   📍
                 </a>
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${focusedPlace.lat},${focusedPlace.lng}&travelmode=transit`}
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(focusedPlace.name + ' ' + focusedPlace.address)}&travelmode=transit`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="shrink-0 text-gray-300 transition-colors hover:text-green-400 active:text-green-600"
@@ -708,6 +724,13 @@ function TransitStepsBar({
     LONG_DISTANCE_TRAIN: '\u{1F686}',
   }
 
+  // 연속된 동일 타입 세그먼트 합치기 (도보→도보 중복 방지)
+  const mergedSegments = segments.reduce<RouteSegment[]>((acc, seg) => {
+    if (acc.length > 0 && acc[acc.length - 1].type === seg.type && seg.type === 'WALK') return acc
+    acc.push(seg)
+    return acc
+  }, [])
+
   const transitSegments = segments.filter(s => s.type === 'TRANSIT')
   const firstDeparture = transitSegments[0]?.departureStop
   const lastArrival = transitSegments[transitSegments.length - 1]?.arrivalStop
@@ -731,7 +754,7 @@ function TransitStepsBar({
       <div className="flex items-center gap-2">
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-1 text-xs">
-            {segments.map((seg, i) => {
+            {mergedSegments.map((seg, i) => {
               if (seg.type === 'WALK') {
                 return (
                   <span key={i} className="contents">
