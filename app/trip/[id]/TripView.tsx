@@ -8,6 +8,20 @@ import PlaceList from './PlaceList'
 import EditPlaceModal from './EditPlaceModal'
 import Link from 'next/link'
 
+interface RouteSegment {
+  type: 'WALK' | 'TRANSIT'
+  encodedPolyline: string
+  vehicle?: string
+  lineName?: string
+  lineShort?: string
+  color?: string
+  departureStop?: string
+  arrivalStop?: string
+  stopCount?: number
+  startLat?: number
+  startLng?: number
+}
+
 type DayWithPlaces = Day & { places: Place[] }
 
 interface Props {
@@ -24,17 +38,9 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   const [mapFocusMode, setMapFocusMode] = useState(false)
   const [editingPlace, setEditingPlace] = useState<Place | null>(null)
   const [activeRoute, setActiveRoute] = useState<{
-    encodedPolyline: string
+    encodedPolyline?: string
     mode: string
-    transitSteps?: Array<{
-      vehicle: string
-      lineName: string
-      lineShort: string
-      color: string
-      departureStop: string
-      arrivalStop: string
-      stopCount: number
-    }>
+    routeSegments?: RouteSegment[]
   } | null>(null)
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null)
 
@@ -144,21 +150,17 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
       }
       const data = await res.json() as {
         encodedPolyline?: string
-        transitSteps?: Array<{
-          vehicle: string
-          lineName: string
-          lineShort: string
-          color: string
-          departureStop: string
-          arrivalStop: string
-          stopCount: number
-        }>
+        routeSegments?: RouteSegment[]
       }
-      if (data.encodedPolyline) {
+      if (mode === 'TRANSIT' && data.routeSegments && data.routeSegments.length > 0) {
+        setActiveRoute({
+          mode,
+          routeSegments: data.routeSegments,
+        })
+      } else if (data.encodedPolyline) {
         setActiveRoute({
           encodedPolyline: data.encodedPolyline,
           mode,
-          transitSteps: data.transitSteps,
         })
       } else {
         setActiveRoute(null)
@@ -371,16 +373,19 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           {!activeRoute && polylinePath.length >= 2 && (
             <Polyline path={polylinePath} />
           )}
-          {activeRoute && (
+          {activeRoute?.routeSegments && (
+            <TransitRouteSegments segments={activeRoute.routeSegments} />
+          )}
+          {activeRoute?.encodedPolyline && (
             <RoutePolyline encodedPolyline={activeRoute.encodedPolyline} mode={activeRoute.mode} />
           )}
         </Map>
       </div>
 
       {/* 대중교통 경로 상세 */}
-      {activeRoute?.transitSteps && activeRoute.transitSteps.length > 0 && (
+      {activeRoute?.routeSegments && activeRoute.routeSegments.length > 0 && (
         <TransitStepsBar
-          steps={activeRoute.transitSteps}
+          segments={activeRoute.routeSegments}
           onDismiss={() => setActiveRoute(null)}
         />
       )}
@@ -627,20 +632,69 @@ function RoutePolyline({ encodedPolyline, mode }: { encodedPolyline: string; mod
   return null
 }
 
+// 대중교통 구간별 폴리라인 + 탑승 마커
+function TransitRouteSegments({ segments }: { segments: RouteSegment[] }) {
+  const map = useMap()
+  const geometryLib = useMapsLibrary('geometry')
+
+  useEffect(() => {
+    if (!map || !geometryLib || segments.length === 0) return
+
+    const polylines: google.maps.Polyline[] = []
+    const bounds = new google.maps.LatLngBounds()
+
+    for (const seg of segments) {
+      const path = geometryLib.encoding.decodePath(seg.encodedPolyline)
+      path.forEach(p => bounds.extend(p))
+
+      const polyline = new google.maps.Polyline({
+        path,
+        geodesic: true,
+        strokeColor: seg.type === 'TRANSIT' ? (seg.color || '#2563eb') : '#9ca3af',
+        strokeOpacity: seg.type === 'TRANSIT' ? 0.9 : 0,
+        strokeWeight: seg.type === 'TRANSIT' ? 4 : 3,
+        ...(seg.type === 'WALK' && {
+          icons: [{
+            icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.6, scale: 3, strokeColor: '#6b7280' },
+            offset: '0',
+            repeat: '14px',
+          }],
+        }),
+      })
+      polyline.setMap(map)
+      polylines.push(polyline)
+    }
+
+    map.fitBounds(bounds, 50)
+
+    return () => {
+      polylines.forEach(p => p.setMap(null))
+    }
+  }, [map, geometryLib, segments])
+
+  return (
+    <>
+      {segments.filter(s => s.type === 'TRANSIT' && s.startLat && s.startLng).map((seg, i) => (
+        <AdvancedMarker key={i} position={{ lat: seg.startLat!, lng: seg.startLng! }}>
+          <div className="flex items-center gap-0.5 rounded-full bg-white px-1.5 py-0.5 shadow text-[9px] font-medium border border-gray-200"
+               style={{ borderColor: seg.color || '#2563eb' }}>
+            <span style={{ color: seg.color || '#2563eb' }}>
+              {seg.vehicle === 'SUBWAY' ? '\u{1F687}' : seg.vehicle === 'BUS' ? '\u{1F68C}' : seg.vehicle === 'RAIL' ? '\u{1F686}' : '\u{1F68C}'}
+            </span>
+            <span className="text-gray-700">{seg.departureStop}</span>
+          </div>
+        </AdvancedMarker>
+      ))}
+    </>
+  )
+}
+
 // 대중교통 경로 상세 바
 function TransitStepsBar({
-  steps,
+  segments,
   onDismiss,
 }: {
-  steps: Array<{
-    vehicle: string
-    lineName: string
-    lineShort: string
-    color: string
-    departureStop: string
-    arrivalStop: string
-    stopCount: number
-  }>
+  segments: RouteSegment[]
   onDismiss: () => void
 }) {
   const vehicleEmoji: Record<string, string> = {
@@ -654,8 +708,9 @@ function TransitStepsBar({
     LONG_DISTANCE_TRAIN: '\u{1F686}',
   }
 
-  const firstDeparture = steps[0]?.departureStop
-  const lastArrival = steps[steps.length - 1]?.arrivalStop
+  const transitSegments = segments.filter(s => s.type === 'TRANSIT')
+  const firstDeparture = transitSegments[0]?.departureStop
+  const lastArrival = transitSegments[transitSegments.length - 1]?.arrivalStop
 
   return (
     <div className="border-t border-b border-gray-100 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-900">
@@ -665,17 +720,27 @@ function TransitStepsBar({
             <p className="text-gray-400 text-[10px] mb-1">{firstDeparture}</p>
           )}
           <div className="flex flex-wrap items-center gap-1 text-xs">
-            {steps.map((step, i) => {
-              const emoji = vehicleEmoji[step.vehicle] ?? '\u{1F68C}'
-              const label = step.lineShort || step.lineName
+            {segments.map((seg, i) => {
+              if (seg.type === 'WALK') {
+                return (
+                  <span key={i} className="contents">
+                    {i > 0 && <span className="text-gray-300 mx-0.5">{'\u2192'}</span>}
+                    <span className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 bg-gray-200 text-gray-600 text-[11px] font-medium">
+                      {'\u{1F6B6}'} {'\uB3C4\uBCF4'}
+                    </span>
+                  </span>
+                )
+              }
+              const emoji = vehicleEmoji[seg.vehicle ?? ''] ?? '\u{1F68C}'
+              const label = seg.lineShort || seg.lineName
               return (
                 <span key={i} className="contents">
                   {i > 0 && <span className="text-gray-300 mx-0.5">{'\u2192'}</span>}
                   <span
                     className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-white text-[11px] font-medium"
-                    style={{ backgroundColor: step.color }}
+                    style={{ backgroundColor: seg.color }}
                   >
-                    {emoji} {label} {'\u00B7'} {step.stopCount}{'\uC815\uAC70\uC7A5'}
+                    {emoji} {label} {'\u00B7'} {seg.stopCount}{'\uC815\uAC70\uC7A5'}
                   </span>
                 </span>
               )

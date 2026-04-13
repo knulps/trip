@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-interface TransitStep {
-  vehicle: string
-  lineName: string
-  lineShort: string
-  color: string
-  departureStop: string
-  arrivalStop: string
-  stopCount: number
+interface RouteSegment {
+  type: 'WALK' | 'TRANSIT'
+  encodedPolyline: string
+  vehicle?: string
+  lineName?: string
+  lineShort?: string
+  color?: string
+  departureStop?: string
+  arrivalStop?: string
+  stopCount?: number
+  startLat?: number
+  startLng?: number
 }
 
 interface GoogleTransitDetails {
@@ -25,6 +29,10 @@ interface GoogleTransitDetails {
 }
 
 interface GoogleStep {
+  polyline?: { encodedPolyline?: string }
+  travelMode?: string
+  startLocation?: { latLng?: { latitude?: number; longitude?: number } }
+  endLocation?: { latLng?: { latitude?: number; longitude?: number } }
   transitDetails?: GoogleTransitDetails
 }
 
@@ -50,7 +58,7 @@ export async function POST(req: NextRequest) {
   }
 
   const fieldMask = mode === 'TRANSIT'
-    ? 'routes.polyline.encodedPolyline,routes.duration,routes.distanceMeters,routes.legs.steps.transitDetails'
+    ? 'routes.polyline.encodedPolyline,routes.duration,routes.distanceMeters,routes.legs.steps.transitDetails,routes.legs.steps.polyline,routes.legs.steps.travelMode,routes.legs.steps.startLocation,routes.legs.steps.endLocation'
     : 'routes.polyline.encodedPolyline,routes.duration,routes.distanceMeters'
 
   try {
@@ -80,7 +88,7 @@ export async function POST(req: NextRequest) {
         encodedPolyline: string
         duration: string | undefined
         distanceMeters: number | undefined
-        transitSteps?: TransitStep[]
+        routeSegments?: RouteSegment[]
       } = {
         encodedPolyline: route.polyline.encodedPolyline,
         duration: route.duration,
@@ -88,24 +96,37 @@ export async function POST(req: NextRequest) {
       }
 
       if (mode === 'TRANSIT' && route.legs) {
-        const transitSteps: TransitStep[] = []
+        const routeSegments: RouteSegment[] = []
         for (const leg of route.legs) {
           for (const step of leg.steps ?? []) {
-            const td = step.transitDetails
-            if (!td) continue
-            transitSteps.push({
-              vehicle: td.transitLine?.vehicle?.type ?? 'BUS',
-              lineName: td.transitLine?.name ?? '',
-              lineShort: td.transitLine?.nameShort ?? '',
-              color: td.transitLine?.color ?? '#6b7280',
-              departureStop: td.stopDetails?.departureStop?.name ?? '',
-              arrivalStop: td.stopDetails?.arrivalStop?.name ?? '',
-              stopCount: td.stopCount ?? 0,
-            })
+            const stepPolyline = step.polyline?.encodedPolyline
+            if (!stepPolyline) continue
+
+            if (step.transitDetails) {
+              const td = step.transitDetails
+              routeSegments.push({
+                type: 'TRANSIT',
+                encodedPolyline: stepPolyline,
+                vehicle: td.transitLine?.vehicle?.type ?? 'BUS',
+                lineName: td.transitLine?.name ?? '',
+                lineShort: td.transitLine?.nameShort ?? '',
+                color: td.transitLine?.color ?? '#6b7280',
+                departureStop: td.stopDetails?.departureStop?.name ?? '',
+                arrivalStop: td.stopDetails?.arrivalStop?.name ?? '',
+                stopCount: td.stopCount ?? 0,
+                startLat: step.startLocation?.latLng?.latitude,
+                startLng: step.startLocation?.latLng?.longitude,
+              })
+            } else {
+              routeSegments.push({
+                type: 'WALK',
+                encodedPolyline: stepPolyline,
+              })
+            }
           }
         }
-        if (transitSteps.length > 0) {
-          result.transitSteps = transitSteps
+        if (routeSegments.length > 0) {
+          result.routeSegments = routeSegments
         }
       }
 
