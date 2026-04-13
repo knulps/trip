@@ -80,35 +80,35 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
       onClick={onClose}
     >
       <div
-        className="fixed bottom-0 left-0 right-0 rounded-t-2xl bg-white p-6 transition-transform dark:bg-gray-900"
+        className="fixed bottom-0 left-0 right-0 rounded-t-2xl bg-white p-6 transition-transform"
         style={{ transform: keyboardHeight > 0 ? `translateY(-${keyboardHeight}px)` : undefined }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-base font-semibold text-gray-900 dark:text-gray-100">
+        <h2 className="mb-4 text-base font-semibold text-gray-900">
           장소 수정
         </h2>
 
         <div className="mb-4 flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <label className="text-xs font-medium text-gray-500">
             장소 이름
           </label>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400"
           />
         </div>
 
         {days && days.length > 1 && (
           <div className="mb-4 flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">
+            <label className="text-xs font-medium text-gray-500">
               날짜 이동
             </label>
             <select
               value={selectedDayId}
               onChange={(e) => setSelectedDayId(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400"
             >
               {days.map((day, i) => {
                 const date = new Date(day.date + 'T00:00:00')
@@ -125,40 +125,40 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
         )}
 
         <div className="mb-4 flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <label className="text-xs font-medium text-gray-500">
             방문 시간
           </label>
           <input
             type="time"
             value={visitTime}
             onChange={(e) => setVisitTime(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400"
           />
         </div>
 
         <div className="mb-6 flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-gray-500 dark:text-gray-400">
+          <label className="text-xs font-medium text-gray-500">
             메모
           </label>
           <textarea
             rows={3}
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400"
           />
         </div>
 
         <div className="flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-600 dark:border-gray-700 dark:text-gray-300"
+            className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-600"
           >
             취소
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
+            className="flex-1 rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white disabled:opacity-50"
           >
             {saving ? '저장 중...' : dayChanged ? '이동 + 저장' : '저장'}
           </button>

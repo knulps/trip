@@ -52,7 +52,7 @@ export default function NewTripPage() {
   return (
     <main className="flex flex-col h-full">
       <header className="flex items-center gap-3 px-4 pb-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
-        <button onClick={() => router.back()} className="text-gray-400 dark:text-gray-500 text-lg">
+        <button onClick={() => router.back()} className="text-gray-400 text-lg">
           ‹
         </button>
         <h1 className="text-base font-semibold">새 여행</h1>
@@ -60,34 +60,34 @@ export default function NewTripPage() {
 
       <div className="flex flex-col gap-4 px-4">
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-gray-500 dark:text-gray-400">여행 이름</label>
+          <label className="text-xs font-medium text-gray-500">여행 이름</label>
           <input
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="예: 파리 여행"
-            className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:border-gray-500 dark:focus:bg-gray-800"
+            className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors"
           />
         </div>
 
         <div className="flex gap-3">
           <div className="flex-1 flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">시작일</label>
+            <label className="text-xs font-medium text-gray-500">시작일</label>
             <input
               type="date"
               value={startDate}
               onChange={e => setStartDate(e.target.value)}
-              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500 dark:focus:bg-gray-800"
+              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors"
             />
           </div>
           <div className="flex-1 flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500 dark:text-gray-400">종료일</label>
+            <label className="text-xs font-medium text-gray-500">종료일</label>
             <input
               type="date"
               value={endDate}
               onChange={e => setEndDate(e.target.value)}
               min={startDate}
-              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-gray-500 dark:focus:bg-gray-800"
+              className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors"
             />
           </div>
         </div>

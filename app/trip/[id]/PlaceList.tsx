@@ -49,22 +49,22 @@ function PlaceItem({
 }) {
   return (
     <li className="flex items-center gap-3 py-3">
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white dark:bg-gray-100 dark:text-gray-900">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white">
         {index + 1}
       </span>
       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(place)}>
         <p className="text-sm font-medium truncate">{place.name}</p>
-        <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
+        <p className="text-xs text-gray-400 truncate">
           {place.visit_time && <span className="mr-1">{place.visit_time.slice(0, 5)}</span>}
           {place.address}
         </p>
         {place.memo && (
-          <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{place.memo}</p>
+          <p className="text-xs text-gray-400 truncate">{place.memo}</p>
         )}
       </div>
       <button
         onClick={() => onFocus?.(place)}
-        className="shrink-0 text-gray-300 transition-colors hover:text-blue-400 active:text-blue-600 dark:text-gray-600 dark:hover:text-blue-400"
+        className="shrink-0 text-gray-300 transition-colors hover:text-blue-400 active:text-blue-600"
         aria-label="지도에서 보기"
       >
         📍
@@ -73,7 +73,7 @@ function PlaceItem({
         href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}&travelmode=transit`}
         target="_blank"
         rel="noopener noreferrer"
-        className="shrink-0 text-gray-300 transition-colors hover:text-green-400 active:text-green-600 dark:text-gray-600 dark:hover:text-green-400"
+        className="shrink-0 text-gray-300 transition-colors hover:text-green-400 active:text-green-600"
         aria-label="길찾기"
       >
         ↗
@@ -107,25 +107,25 @@ function SortablePlaceItem({
       <span
         {...attributes}
         {...listeners}
-        className="shrink-0 cursor-grab text-gray-300 active:cursor-grabbing dark:text-gray-600"
+        className="shrink-0 cursor-grab text-gray-300 active:cursor-grabbing"
         aria-label="드래그 핸들"
         style={{ touchAction: 'none' }}
       >
         ⠿
       </span>
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white dark:bg-gray-100 dark:text-gray-900">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white">
         {index + 1}
       </span>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{place.name}</p>
-        <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
+        <p className="text-xs text-gray-400 truncate">
           {place.visit_time && <span className="mr-1">{place.visit_time.slice(0, 5)}</span>}
           {place.address}
         </p>
       </div>
       <button
         onClick={() => onDelete(place.id)}
-        className="shrink-0 text-gray-300 transition-colors hover:text-red-400 active:text-red-600 dark:text-gray-600 dark:hover:text-red-400"
+        className="shrink-0 text-gray-300 transition-colors hover:text-red-400 active:text-red-600"
         aria-label="장소 삭제"
       >
         ✕
@@ -186,7 +186,7 @@ function DraggableDayPlaces({
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={localPlaces.map(p => p.id)} strategy={verticalListSortingStrategy}>
-        <ol className="flex flex-col divide-y divide-gray-50 px-4 dark:divide-gray-800">
+        <ol className="flex flex-col divide-y divide-gray-50 px-4">
           {localPlaces.map((place, i) => (
             <SortablePlaceItem key={place.id} place={place} index={i} onDelete={deletePlace} />
           ))}
@@ -225,9 +225,9 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
               }}
             >
               {/* Day Header */}
-              <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-sm px-4 py-2 border-b border-gray-100 dark:bg-gray-950/90 dark:border-gray-800">
+              <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-sm px-4 py-2 border-b border-gray-100">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  <span className="text-sm font-semibold text-gray-900">
                     Day {dayIndex + 1}{' '}
                     <span className="text-xs font-normal text-gray-400">{dateLabel}</span>
                     <span className="ml-1.5 text-xs font-normal text-gray-400">
@@ -250,7 +250,7 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
                   {!editMode && (
                     <Link
                       href={`/trip/add?dayId=${day.id}`}
-                      className="rounded-lg bg-gray-900 px-3.5 py-1.5 text-xs font-medium text-white dark:bg-gray-100 dark:text-gray-900"
+                      className="rounded-lg bg-gray-900 px-3.5 py-1.5 text-xs font-medium text-white"
                     >
                       + 장소 추가
                     </Link>

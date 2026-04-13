@@ -212,19 +212,19 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
   return (
     <main className="flex flex-col h-full">
       <header className="flex items-center gap-3 px-4 pb-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
-        <Link href={`/trip/${trip.id}`} className="text-gray-400 dark:text-gray-500 text-lg">&#8249;</Link>
+        <Link href={`/trip/${trip.id}`} className="text-gray-400 text-lg">&#8249;</Link>
         <h1 className="text-base font-semibold">장소 가져오기</h1>
       </header>
 
       <div className="flex flex-col gap-4 px-4 flex-1 overflow-y-auto pb-4">
         {/* 파일 업로드 */}
         <div>
-          <label className="text-xs text-gray-500 dark:text-gray-400">CSV 파일 선택</label>
+          <label className="text-xs text-gray-500">CSV 파일 선택</label>
           <input
             type="file"
             accept=".csv"
             onChange={handleFileChange}
-            className="w-full mt-1 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-gray-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white dark:file:bg-gray-100 dark:file:text-gray-900"
+            className="w-full mt-1 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-gray-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
           />
         </div>
 
@@ -235,7 +235,7 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
               <select
                 value={selectedDayId}
                 onChange={(e) => setSelectedDayId(e.target.value)}
-                className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm"
               >
                 {days.map((day, i) => {
                   const date = new Date(day.date + 'T00:00:00')
@@ -252,7 +252,7 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
                   const allSelected = parsedPlaces.filter(p => !p.added).every(p => p.selected)
                   setParsedPlaces(prev => prev.map(p => p.added ? p : { ...p, selected: !allSelected }))
                 }}
-                className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600 dark:border-gray-700 dark:text-gray-300"
+                className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600"
               >
                 {parsedPlaces.filter(p => !p.added).every(p => p.selected) ? '전체 해제' : '전체 선택'}
               </button>
@@ -265,7 +265,7 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
                   <button
                     onClick={resolveSelected}
                     disabled={resolving}
-                    className="flex-1 rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900"
+                    className="flex-1 rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white disabled:opacity-50"
                   >
                     {resolving ? `좌표 검색 중... (${progress.current}/${progress.total})` : `${selectedCount}개 좌표 검색`}
                   </button>
@@ -297,7 +297,7 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
               {selectableCount}개 중 {selectedCount}개 선택
               {parsedPlaces.some(p => p.added) && ` · ${parsedPlaces.filter(p => p.added).length}개 추가 완료`}
             </p>
-            <div className="flex flex-col divide-y divide-gray-50 dark:divide-gray-800">
+            <div className="flex flex-col divide-y divide-gray-50">
               {parsedPlaces.map((place, i) => (
                 <div
                   key={i}

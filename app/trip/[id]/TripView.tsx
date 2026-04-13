@@ -249,19 +249,19 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     <div className="flex flex-col h-full">
       {/* 헤더 */}
       <header className="flex items-center gap-3 px-4 pb-2" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
-        <Link href="/" className="text-gray-400 dark:text-gray-500">
+        <Link href="/" className="text-gray-400">
           ‹
         </Link>
         <div className="flex-1 min-w-0">
           <h1 className="text-base font-semibold truncate">{trip.name}</h1>
-          <p className="text-xs text-gray-400 dark:text-gray-500">
+          <p className="text-xs text-gray-400">
             {trip.start_date} – {trip.end_date}
           </p>
         </div>
         {/* 가져오기 */}
         <Link
           href={`/trip/${trip.id}/import`}
-          className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+          className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-gray-50"
         >
           가져오기
         </Link>
@@ -276,7 +276,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
             editMode
               ? 'bg-blue-600 text-white'
-              : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+              : 'bg-gray-100 text-gray-600'
           }`}
         >
           {editMode ? '완료' : '편집'}
@@ -294,8 +294,8 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                   onClick={() => scrollToDay(day.id)}
                   className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
                     day.id === selectedDayId
-                      ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
-                      : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+                      ? 'bg-gray-900 text-white'
+                      : 'bg-gray-100 text-gray-600'
                   }`}
                 >
                   <span className="flex flex-col items-center leading-tight">
@@ -325,7 +325,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           height: mapFocusMode ? '55dvh' : '35dvh',
           transition: 'height 0.3s ease',
         }}
-        className="dark:bg-gray-900"
+        className=""
       >
         <Map
           defaultCenter={mapDefaultCenter}
@@ -392,12 +392,12 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
 
       {/* 포커스 모드: 하단 장소 카드 / 일반 모드: 장소 리스트 */}
       {mapFocusMode ? (
-        <div className="flex-1 overflow-y-auto border-t border-gray-100 dark:border-gray-800">
+        <div className="flex-1 overflow-y-auto border-t border-gray-100">
           {/* 헤더 */}
           <div className="px-4 py-2 flex items-center justify-between">
             <button
               onClick={() => { setMapFocusMode(false); setActiveRoute(null) }}
-              className="text-gray-400 dark:text-gray-500 text-sm"
+              className="text-gray-400 text-sm"
             >
               ← 목록
             </button>
@@ -409,7 +409,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                 <p className="flex-1 text-sm font-semibold">{focusedPlace.name}</p>
                 <button
                   onClick={() => setEditingPlace(focusedPlace)}
-                  className="shrink-0 text-gray-300 transition-colors hover:text-gray-500 active:text-gray-700 dark:text-gray-600 dark:hover:text-gray-400"
+                  className="shrink-0 text-gray-300 transition-colors hover:text-gray-500 active:text-gray-700"
                   aria-label="수정"
                 >
                   ✏️
@@ -418,7 +418,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                   href={`https://www.google.com/maps/search/?api=1&query=${focusedPlace.lat},${focusedPlace.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="shrink-0 text-gray-300 transition-colors hover:text-blue-400 active:text-blue-600 dark:text-gray-600 dark:hover:text-blue-400"
+                  className="shrink-0 text-gray-300 transition-colors hover:text-blue-400 active:text-blue-600"
                   aria-label="지도에서 보기"
                 >
                   📍
@@ -427,7 +427,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                   href={`https://www.google.com/maps/dir/?api=1&destination=${focusedPlace.lat},${focusedPlace.lng}&travelmode=transit`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="shrink-0 text-gray-300 transition-colors hover:text-green-400 active:text-green-600 dark:text-gray-600 dark:hover:text-green-400"
+                  className="shrink-0 text-gray-300 transition-colors hover:text-green-400 active:text-green-600"
                   aria-label="길찾기"
                 >
                   ↗
@@ -435,7 +435,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
               </div>
 
               {/* 상세 정보 */}
-              <div className="flex flex-col gap-1.5 pb-2 text-xs text-gray-500 dark:text-gray-400">
+              <div className="flex flex-col gap-1.5 pb-2 text-xs text-gray-500">
                 <p>📫 {focusedPlace.address}</p>
                 {focusedPlace.visit_time && (
                   <p>🕐 {focusedPlace.visit_time.slice(0, 5)}</p>
@@ -448,7 +448,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
               {/* 현위치 거리 */}
               <button
                 onClick={requestCurrentLocation}
-                className="text-xs text-blue-600 dark:text-blue-400 py-1"
+                className="text-xs text-blue-600 py-1"
               >
                 📍 현위치에서 거리 확인
               </button>
@@ -507,7 +507,7 @@ function InviteButton({ tripId: _tripId, inviteToken }: { tripId: string; invite
   return (
     <button
       onClick={copyLink}
-      className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+      className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-gray-50"
     >
       {copied ? '복사됨 ✓' : '초대'}
     </button>
@@ -540,7 +540,7 @@ function AddDayButton({ tripId, onAdded }: { tripId: string; onAdded: () => void
   return (
     <button
       onClick={addDay}
-      className="shrink-0 rounded-full bg-gray-100 px-3.5 py-1.5 text-xs font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+      className="shrink-0 rounded-full bg-gray-100 px-3.5 py-1.5 text-xs font-medium text-gray-500"
     >
       + 날짜
     </button>
@@ -713,7 +713,7 @@ function TransitStepsBar({
   const lastArrival = transitSegments[transitSegments.length - 1]?.arrivalStop
 
   return (
-    <div className="border-t border-b border-gray-100 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-900">
+    <div className="border-t border-b border-gray-100 bg-white px-3 py-2">
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
           {firstDeparture && (
@@ -798,7 +798,7 @@ function CurrentLocationDistance({
         <button
           key={r.mode}
           onClick={() => onSelectRoute?.(r.mode)}
-          className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 active:bg-blue-100 dark:bg-gray-800 dark:text-gray-400"
+          className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 active:bg-blue-100"
         >
           {r.icon} {r.minutes}분 · {r.distance}
         </button>

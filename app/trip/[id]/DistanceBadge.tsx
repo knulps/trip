@@ -55,7 +55,7 @@ export default function DistanceBadge({ from, to, onSelectRoute }: DistanceBadge
         <button
           key={r.mode}
           onClick={() => onSelectRoute?.({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, r.mode)}
-          className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 active:bg-blue-100 dark:bg-gray-800 dark:text-gray-400"
+          className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 active:bg-blue-100"
         >
           {r.icon} {r.minutes}분
         </button>
