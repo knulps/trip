@@ -272,15 +272,8 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
             {trip.start_date} – {trip.end_date}
           </p>
         </div>
-        {/* 가져오기 */}
-        <Link
-          href={`/trip/${trip.id}/import`}
-          className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-gray-50"
-        >
-          가져오기
-        </Link>
-        {/* 초대 링크 복사 */}
-        <InviteButton tripId={trip.id} inviteToken={trip.invite_token} />
+        {/* 더보기 메뉴 */}
+        <HeaderMenu tripId={trip.id} inviteToken={trip.invite_token} />
       </header>
 
       {/* 날짜 탭 + 편집 토글 */}
@@ -520,24 +513,55 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   )
 }
 
-// 초대 링크 복사 버튼
-function InviteButton({ tripId: _tripId, inviteToken }: { tripId: string; inviteToken: string }) {
+// 헤더 더보기 메뉴 (가져오기 + 초대)
+function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: string }) {
+  const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
 
-  async function copyLink() {
+  useEffect(() => {
+    if (!open) return
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  async function copyInviteLink() {
     const url = `${window.location.origin}/invite/${inviteToken}`
     await navigator.clipboard.writeText(url)
     setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setTimeout(() => { setCopied(false); setOpen(false) }, 1500)
   }
 
   return (
-    <button
-      onClick={copyLink}
-      className="shrink-0 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium transition-colors hover:bg-gray-50"
-    >
-      {copied ? '복사됨 ✓' : '초대'}
-    </button>
+    <div ref={ref} className="relative shrink-0">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 active:bg-gray-200 text-lg leading-none"
+        aria-label="더보기"
+      >
+        ⋮
+      </button>
+      {open && (
+        <div className="absolute right-0 top-9 z-50 min-w-[120px] rounded-xl border border-gray-100 bg-white py-1 shadow-lg">
+          <Link
+            href={`/trip/${tripId}/import`}
+            className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+            onClick={() => setOpen(false)}
+          >
+            가져오기
+          </Link>
+          <button
+            onClick={copyInviteLink}
+            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+          >
+            {copied ? '복사됨 ✓' : '초대 링크 복사'}
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
