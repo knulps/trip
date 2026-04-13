@@ -108,7 +108,7 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
             <select
               value={selectedDayId}
               onChange={(e) => setSelectedDayId(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-gray-400"
+              className="w-full rounded-lg border border-gray-200 pl-3 pr-8 py-2 text-sm text-gray-900 outline-none focus:border-gray-400"
             >
               {days.map((day, i) => {
                 const date = new Date(day.date + 'T00:00:00')

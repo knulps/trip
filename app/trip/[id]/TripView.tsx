@@ -402,6 +402,8 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
       {activeRoute?.routeSegments && activeRoute.routeSegments.length > 0 && (
         <TransitStepsBar
           segments={activeRoute.routeSegments}
+          origin={activeRoute.origin}
+          destination={activeRoute.destination}
           onDismiss={() => setActiveRoute(null)}
         />
       )}
@@ -666,14 +668,14 @@ function TransitRouteSegments({ segments }: { segments: RouteSegment[] }) {
       const polyline = new google.maps.Polyline({
         path,
         geodesic: true,
-        strokeColor: seg.type === 'TRANSIT' ? (seg.color || '#2563eb') : '#9ca3af',
+        strokeColor: seg.type === 'TRANSIT' ? (seg.color || '#2563eb') : undefined,
         strokeOpacity: seg.type === 'TRANSIT' ? 0.9 : 0,
         strokeWeight: seg.type === 'TRANSIT' ? 4 : 3,
         ...(seg.type === 'WALK' && {
           icons: [{
-            icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.6, scale: 3, strokeColor: '#6b7280' },
+            icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 4, strokeColor: '#1d4ed8' },
             offset: '0',
-            repeat: '14px',
+            repeat: '12px',
           }],
         }),
       })
@@ -708,9 +710,13 @@ function TransitRouteSegments({ segments }: { segments: RouteSegment[] }) {
 // 대중교통 경로 상세 바
 function TransitStepsBar({
   segments,
+  origin,
+  destination,
   onDismiss,
 }: {
   segments: RouteSegment[]
+  origin?: { lat: number; lng: number }
+  destination?: { lat: number; lng: number }
   onDismiss: () => void
 }) {
   const vehicleEmoji: Record<string, string> = {
@@ -781,13 +787,25 @@ function TransitStepsBar({
             })}
           </div>
         </div>
-        <button
-          onClick={onDismiss}
-          className="shrink-0 text-gray-400 hover:text-gray-600 text-sm px-1"
-          aria-label="닫기"
-        >
-          {'\u2715'}
-        </button>
+        <div className="shrink-0 flex items-center gap-1">
+          {origin && destination && (
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${destination.lat},${destination.lng}&travelmode=transit`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-100 active:bg-blue-200"
+            >
+              구글맵 ↗
+            </a>
+          )}
+          <button
+            onClick={onDismiss}
+            className="text-gray-400 hover:text-gray-600 text-sm px-1"
+            aria-label="닫기"
+          >
+            {'\u2715'}
+          </button>
+        </div>
       </div>
     </div>
   )

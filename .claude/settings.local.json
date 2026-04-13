@@ -9,7 +9,12 @@
       "Bash(git push:*)",
       "Bash(npm install:*)",
       "Bash(npx next:*)",
-      "Skill(review)"
+      "Skill(review)",
+      "Bash(node node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(python3:*)",
+      "Bash(node:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }
