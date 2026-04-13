@@ -128,7 +128,6 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     destination: { lat: number; lng: number },
     mode: string
   ) {
-    setActiveRoute(null)
     try {
       const res = await fetch('/api/route', {
         method: 'POST',
@@ -139,7 +138,10 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           mode,
         }),
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        setActiveRoute(null)
+        return
+      }
       const data = await res.json() as {
         encodedPolyline?: string
         transitSteps?: Array<{
@@ -158,8 +160,12 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           mode,
           transitSteps: data.transitSteps,
         })
+      } else {
+        setActiveRoute(null)
       }
-    } catch { /* ignore */ }
+    } catch {
+      setActiveRoute(null)
+    }
   }
 
   function requestCurrentLocation() {
@@ -610,6 +616,11 @@ function RoutePolyline({ encodedPolyline, mode }: { encodedPolyline: string; mod
     })
 
     polyline.setMap(map)
+
+    const bounds = new google.maps.LatLngBounds()
+    path.forEach(p => bounds.extend(p))
+    map.fitBounds(bounds, 50)
+
     return () => polyline.setMap(null)
   }, [map, geometryLib, encodedPolyline, mode])
 
@@ -648,12 +659,12 @@ function TransitStepsBar({
 
   return (
     <div className="border-t border-b border-gray-100 bg-white px-3 py-2 dark:border-gray-800 dark:bg-gray-900">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 overflow-x-auto scrollbar-hide">
-          <div className="flex items-center gap-1 text-xs whitespace-nowrap">
-            {firstDeparture && (
-              <span className="text-gray-400 text-[10px] mr-1">{firstDeparture}</span>
-            )}
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          {firstDeparture && (
+            <p className="text-gray-400 text-[10px] mb-1">{firstDeparture}</p>
+          )}
+          <div className="flex flex-wrap items-center gap-1 text-xs">
             {steps.map((step, i) => {
               const emoji = vehicleEmoji[step.vehicle] ?? '\u{1F68C}'
               const label = step.lineShort || step.lineName
@@ -669,10 +680,10 @@ function TransitStepsBar({
                 </span>
               )
             })}
-            {lastArrival && (
-              <span className="text-gray-400 text-[10px] ml-1">{lastArrival}</span>
-            )}
           </div>
+          {lastArrival && (
+            <p className="text-gray-400 text-[10px] mt-1">{lastArrival}</p>
+          )}
         </div>
         <button
           onClick={onDismiss}

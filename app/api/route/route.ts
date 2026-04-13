@@ -65,6 +65,10 @@ export async function POST(req: NextRequest) {
         origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
         destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
         travelMode: mode,
+        ...(mode === 'TRANSIT' && {
+          computeAlternativeRoutes: false,
+          departureTime: new Date().toISOString(),
+        }),
       }),
     })
 
