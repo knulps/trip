@@ -2,6 +2,14 @@
 
 지인들과 실시간으로 함께 만드는 여행 일정 관리 앱.
 
+<table>
+  <tr>
+    <td><img src="screenshot1.png" width="240" alt="지도 + 장소 상세" /></td>
+    <td><img src="screenshot2.png" width="240" alt="일정 목록 + 대중교통 경로" /></td>
+    <td><img src="screenshot3.png" width="240" alt="장소 수정" /></td>
+  </tr>
+</table>
+
 ## 기술 스택
 
 - Next.js 16 / React 19 / TypeScript
@@ -24,11 +32,12 @@
 - Google Maps 지도에 장소 마커 + 경로 폴리라인
 - 마커 탭 시 포커스 모드 (지도 확장 + 장소 상세 카드)
 - 상세 카드: 주소, 방문시간, 메모, 수정, 길찾기, 지도 보기
-- 지도 다크모드 (시스템 설정 연동)
+- POI(구글맵 기본 마커) 클릭 시 장소명/주소 카드 + 구글맵 딥링크
 
 **이동 경로**
 - 장소간 거리/소요시간 표시 (대중교통/택시/도보 3모드 동시)
 - 모드 탭 시 실제 도로 경로 폴리라인 표시 (Routes API)
+- 대중교통 경로 상세 표시 (노선명, 정거장 수, 환승 정보, 구간별 도보/노선 시각화)
 - 현위치에서 장소까지 거리 확인 (Geolocation)
 - 구글 길찾기 바로 연동
 
@@ -39,14 +48,14 @@
 
 **협업**
 - Google OAuth 로그인
-- 초대 링크로 멤버 추가
+- 초대 링크로 멤버 추가 (헤더 쓰리닷 드롭다운 메뉴로 가져오기/초대 통합)
 - Supabase Realtime 실시간 동기화
 
 **모바일/PWA**
 - PWA 지원 (홈화면 설치, 주소창 없이 사용)
 - Safe Area 대응 (노치/Dynamic Island)
 - 모바일 키보드 대응 (visualViewport API)
-- 다크모드 지원
+- 스켈레톤 로딩 화면 (여행 페이지 진입 시)
 
 ## 환경 변수
 
@@ -81,12 +90,12 @@ npm run start  # 프로덕션 서버
 
 ```
 app/
-  layout.tsx, page.tsx, manifest.ts, globals.css
+  layout.tsx, page.tsx, manifest.ts, globals.css, favicon.ico
   login/page.tsx
   auth/callback/route.ts
   trip/
     [id]/
-      page.tsx, TripView.tsx, PlaceList.tsx
+      page.tsx, loading.tsx, TripView.tsx, PlaceList.tsx
       EditPlaceModal.tsx, DistanceBadge.tsx
       import/page.tsx, ImportView.tsx
     new/page.tsx
@@ -95,6 +104,7 @@ app/
   api/
     distance/route.ts
     route/route.ts
+    resolve-place/route.ts
 lib/supabase/client.ts, server.ts
 types/supabase.ts
 public/icon.svg, sw.js

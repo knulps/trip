@@ -14,7 +14,12 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(python3:*)",
       "Bash(node:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh repo:*)",
+      "Bash(git fetch:*)",
+      "Bash(~/.claude/skills/gstack/bin/gstack-config get:*)",
+      "Bash(~/.claude/skills/gstack/bin/gstack-learnings-search --limit 10)"
     ]
   }
 }
