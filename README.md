@@ -1,111 +1,156 @@
-# 여행 일정
+# Trip Planner
 
-지인들과 실시간으로 함께 만드는 여행 일정 관리 앱.
+**Collaborative travel itinerary management — plan trips, share with friends, and navigate in real time.**
 
-<table>
-  <tr>
-    <td><img src="screenshot1.png" width="240" alt="지도 + 장소 상세" /></td>
-    <td><img src="screenshot2.png" width="240" alt="일정 목록 + 대중교통 경로" /></td>
-    <td><img src="screenshot3.png" width="240" alt="장소 수정" /></td>
-  </tr>
-</table>
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript)](https://www.typescriptlang.org)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?logo=tailwindcss)](https://tailwindcss.com)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL%20%2B%20Realtime-3ECF8E?logo=supabase)](https://supabase.com)
+[![PWA](https://img.shields.io/badge/PWA-ready-5A0FC8?logo=pwa)](https://web.dev/progressive-web-apps)
 
-## 기술 스택
+---
 
-- Next.js 16 / React 19 / TypeScript
-- Tailwind CSS v4
-- Supabase (PostgreSQL, Auth, Realtime)
-- Google Maps API (Maps, Places, Routes)
-- dnd-kit (드래그 앤 드롭)
-- PWA (홈화면 설치, standalone 모드)
+## Features
 
-## 주요 기능
+- **📅 Itinerary Management** — Create trips with date ranges, add/edit/delete places per day with notes, drag-and-drop reordering, and dynamic day management.
+- **🗺️ Interactive Map** — Google Maps markers with route polylines, tap-to-focus place cards showing address, visit time, and notes. Tap any POI for a quick card with a Google Maps deep link.
+- **🚌 Directions** — Transit, taxi, and walking travel times shown simultaneously. Tap a mode to render the route polyline via the Routes API. Shows line names, stop counts, and transfer details. Geolocation-aware distances and a direct Google Maps directions link.
+- **📥 Google Takeout Import** — Import saved places from a Google Takeout CSV, distribute them across days interactively, auto-resolve coordinates via the Places API, and skip duplicates.
+- **🤝 Real-time Collaboration** — Google OAuth, shareable invite links, and live sync powered by Supabase Realtime. All itinerary changes propagate instantly to every member.
+- **📱 Mobile / PWA** — Installable as a PWA (home screen, standalone mode). Handles safe areas (notch / Dynamic Island), `visualViewport` keyboard shifts, and skeleton loading screens.
 
-**일정 관리**
-- 여행 생성/관리 (시작일~종료일)
-- Day별 장소 추가/수정/삭제, 메모
-- 장소 드래그 앤 드롭 순서 변경 (편집 모드 토글)
-- Day 추가/삭제, 날짜/요일 표시
-- Day별 장소 전체 삭제
+---
 
-**지도**
-- Google Maps 지도에 장소 마커 + 경로 폴리라인
-- 마커 탭 시 포커스 모드 (지도 확장 + 장소 상세 카드)
-- 상세 카드: 주소, 방문시간, 메모, 수정, 길찾기, 지도 보기
-- POI(구글맵 기본 마커) 클릭 시 장소명/주소 카드 + 구글맵 딥링크
+## Getting Started
 
-**이동 경로**
-- 장소간 거리/소요시간 표시 (대중교통/택시/도보 3모드 동시)
-- 모드 탭 시 실제 도로 경로 폴리라인 표시 (Routes API)
-- 대중교통 경로 상세 표시 (노선명, 정거장 수, 환승 정보, 구간별 도보/노선 시각화)
-- 현위치에서 장소까지 거리 확인 (Geolocation)
-- 구글 길찾기 바로 연동
+### Prerequisites
 
-**가져오기**
-- Google Takeout CSV 파일 가져오기
-- 체크 → Day 선택 → 추가 반복 방식으로 Day별 분배
-- Places API 좌표 자동 검색, 중복 스킵
+- Node.js 20+
+- A [Supabase](https://supabase.com) project
+- A [Google Cloud](https://console.cloud.google.com) project with the following APIs enabled:
+  - Maps JavaScript API
+  - Places API
+  - Routes API
 
-**협업**
-- Google OAuth 로그인
-- 초대 링크로 멤버 추가 (헤더 쓰리닷 드롭다운 메뉴로 가져오기/초대 통합)
-- Supabase Realtime 실시간 동기화
-
-**모바일/PWA**
-- PWA 지원 (홈화면 설치, 주소창 없이 사용)
-- Safe Area 대응 (노치/Dynamic Island)
-- 모바일 키보드 대응 (visualViewport API)
-- 스켈레톤 로딩 화면 (여행 페이지 진입 시)
-
-## 환경 변수
-
-`.env.local` 파일에 아래 값을 설정한다.
-
-| 변수명 | 설명 |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Anon Key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Service Role Key |
-| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Maps API Key (Maps, Places) |
-| `GOOGLE_MAPS_SERVER_KEY` | Google Routes API Key (서버용, 거리/경로) |
-
-## 데이터베이스
-
-Supabase PostgreSQL을 사용하며, RLS 정책으로 멤버만 접근 가능하다.
-
-- **trips** -- 여행 정보
-- **days** -- 여행 일자
-- **places** -- 장소 (이름, 좌표, 주소, 방문시간, 메모)
-- **trip_members** -- 멤버
-
-## 스크립트
+### Installation
 
 ```bash
-npm run dev    # 개발 서버
-npm run build  # 빌드
-npm run start  # 프로덕션 서버
+git clone https://github.com/knulps/trip.git
+cd trip
+npm install
 ```
 
-## 디렉토리 구조
+### Setup
+
+1. Copy the example environment file and fill in your credentials:
+
+   ```bash
+   cp .env.local.example .env.local
+   ```
+
+2. Apply the database schema from `supabase/schema.sql` in your Supabase SQL editor (see [Database](#database)).
+
+3. Start the development server:
+
+   ```bash
+   npm run dev
+   ```
+
+   Open [http://localhost:3000](http://localhost:3000).
+
+---
+
+## Configuration
+
+All configuration is done via environment variables.
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous (public) key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) |
+| `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` | Google Maps API key (Maps JS + Places, client-side) |
+| `GOOGLE_MAPS_SERVER_KEY` | Google Maps API key for Routes API (server-side only) |
+
+---
+
+## Database
+
+Hosted on Supabase (PostgreSQL). Row-Level Security (RLS) restricts all data access to trip members only.
+
+| Table | Purpose |
+|---|---|
+| `trips` | Trip metadata (title, start/end dates, owner) |
+| `days` | Individual days belonging to a trip |
+| `places` | Places per day (name, coordinates, address, visit time, notes) |
+| `trip_members` | Members of each trip (used for RLS and invite management) |
+
+---
+
+## Project Structure
 
 ```
 app/
-  layout.tsx, page.tsx, manifest.ts, globals.css, favicon.ico
-  login/page.tsx
-  auth/callback/route.ts
-  trip/
-    [id]/
-      page.tsx, loading.tsx, TripView.tsx, PlaceList.tsx
-      EditPlaceModal.tsx, DistanceBadge.tsx
-      import/page.tsx, ImportView.tsx
-    new/page.tsx
-    add/page.tsx, AddPlaceView.tsx
-  invite/[token]/route.ts
-  api/
-    distance/route.ts
-    route/route.ts
-    resolve-place/route.ts
-lib/supabase/client.ts, server.ts
-types/supabase.ts
-public/icon.svg, sw.js
+├── layout.tsx                  # Root layout, fonts, PWA meta
+├── page.tsx                    # Home / trip list
+├── globals.css                 # Tailwind base styles
+├── manifest.ts                 # PWA manifest
+├── login/                      # Google OAuth login page
+├── auth/callback/              # OAuth callback handler
+├── trip/
+│   ├── new/                    # Create new trip
+│   ├── add/                    # Add places flow
+│   └── [id]/
+│       ├── TripView.tsx        # Main trip view (map + list)
+│       ├── PlaceList.tsx       # Day-by-day place list with DnD
+│       ├── EditPlaceModal.tsx  # Edit place details
+│       ├── DistanceBadge.tsx   # Transit/taxi/walk distance badge
+│       └── import/             # Google Takeout CSV import UI
+├── invite/[token]/             # Invite link handler
+└── api/
+    ├── distance/               # Server route: travel time via Routes API
+    ├── route/                  # Server route: polyline for a travel mode
+    └── resolve-place/          # Server route: place → coordinates (Places API)
+
+lib/
+├── supabase/
+│   ├── client.ts               # Browser Supabase client
+│   └── server.ts               # Server Supabase client (cookies)
+types/
+└── supabase.ts                 # Generated Supabase types
+
+public/
+├── icon.svg                    # App icon
+└── sw.js                       # Service worker (PWA)
 ```
+
+---
+
+## Scripts
+
+```bash
+npm run dev      # Start development server (http://localhost:3000)
+npm run build    # Production build
+npm run start    # Start production server
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | [Next.js 16](https://nextjs.org) (App Router) |
+| UI | [React 19](https://react.dev) + [TypeScript](https://www.typescriptlang.org) |
+| Styling | [Tailwind CSS v4](https://tailwindcss.com) |
+| Database / Auth | [Supabase](https://supabase.com) (PostgreSQL + Auth + Realtime) |
+| Maps | [Google Maps Platform](https://developers.google.com/maps) (Maps JS, Places, Routes) |
+| Drag & Drop | [dnd-kit](https://dndkit.com) |
+| PWA | Service Worker + Web App Manifest |
+
+---
+
+## License
+
+MIT
