@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useTranslations } from 'next-intl'
 
 export default function NewTripPage() {
+  const t = useTranslations('trip.new')
   const router = useRouter()
   const supabase = createClient()
 
@@ -55,24 +57,24 @@ export default function NewTripPage() {
         <button onClick={() => router.back()} className="text-gray-400 text-lg">
           ‹
         </button>
-        <h1 className="text-base font-semibold">새 여행</h1>
+        <h1 className="text-base font-semibold">{t('title')}</h1>
       </header>
 
       <div className="flex flex-col gap-4 px-4">
         <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-gray-500">여행 이름</label>
+          <label className="text-xs font-medium text-gray-500">{t('nameLabel')}</label>
           <input
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
-            placeholder="예: 파리 여행"
+            placeholder={t('namePlaceholder')}
             className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors"
           />
         </div>
 
         <div className="flex gap-3">
           <div className="flex-1 flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500">시작일</label>
+            <label className="text-xs font-medium text-gray-500">{t('startDate')}</label>
             <input
               type="date"
               value={startDate}
@@ -81,7 +83,7 @@ export default function NewTripPage() {
             />
           </div>
           <div className="flex-1 flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500">종료일</label>
+            <label className="text-xs font-medium text-gray-500">{t('endDate')}</label>
             <input
               type="date"
               value={endDate}
@@ -97,7 +99,7 @@ export default function NewTripPage() {
           disabled={!name || !startDate || !endDate || saving}
           className="w-full rounded-xl bg-gray-900 py-3 text-sm font-medium text-white disabled:opacity-40 transition-opacity mt-2"
         >
-          {saving ? '만드는 중...' : '여행 만들기'}
+          {saving ? t('submitting') : t('submit')}
         </button>
       </div>
     </main>

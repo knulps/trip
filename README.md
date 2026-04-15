@@ -9,6 +9,14 @@
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL%20%2B%20Realtime-3ECF8E?logo=supabase)](https://supabase.com)
 [![PWA](https://img.shields.io/badge/PWA-ready-5A0FC8?logo=pwa)](https://web.dev/progressive-web-apps)
 
+<table>
+  <tr>
+    <td><img src="screenshot1.png" width="240" alt="Map + place details" /></td>
+    <td><img src="screenshot2.png" width="240" alt="Itinerary list + transit directions" /></td>
+    <td><img src="screenshot3.png" width="240" alt="Edit place" /></td>
+  </tr>
+</table>
+
 ---
 
 ## Features

@@ -2,8 +2,11 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Trip } from '@/types/supabase'
+import { getTranslations } from 'next-intl/server'
+import LocaleSwitcher from '@/components/LocaleSwitcher'
 
 export default async function HomePage() {
+  const t = await getTranslations('home')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -22,25 +25,28 @@ export default async function HomePage() {
   return (
     <main className="flex flex-col h-full">
       <header className="flex items-center justify-between px-5 pb-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
-        <h1 className="text-xl font-semibold">여행</h1>
-        <Link
-          href="/trip/new"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-white text-xl leading-none"
-          aria-label="새 여행 만들기"
-        >
-          +
-        </Link>
+        <h1 className="text-xl font-semibold">{t('title')}</h1>
+        <div className="flex items-center gap-2">
+          <LocaleSwitcher />
+          <Link
+            href="/trip/new"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-900 text-white text-xl leading-none"
+            aria-label={t('newTrip')}
+          >
+            +
+          </Link>
+        </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-5 pb-8">
         {trips.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
-            <p className="text-sm text-gray-400">아직 여행이 없어요</p>
+            <p className="text-sm text-gray-400">{t('empty')}</p>
             <Link
               href="/trip/new"
               className="rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-medium text-white"
             >
-              첫 여행 만들기
+              {t('createFirst')}
             </Link>
           </div>
         ) : (

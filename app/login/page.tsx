@@ -1,8 +1,11 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import { useTranslations } from 'next-intl'
+import LocaleSwitcher from '@/components/LocaleSwitcher'
 
 export default function LoginPage() {
+  const t = useTranslations('auth')
   const supabase = createClient()
 
   async function signInWithGoogle() {
@@ -15,10 +18,13 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex h-full flex-col items-center justify-center gap-6 px-6">
+    <main className="relative flex h-full flex-col items-center justify-center gap-6 px-6">
+      <div className="absolute top-4 right-4">
+        <LocaleSwitcher />
+      </div>
       <div className="text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Trip</h1>
-        <p className="mt-2 text-sm text-gray-500">지인들과 함께 만드는 여행 일정</p>
+        <p className="mt-2 text-sm text-gray-500">{t('tagline')}</p>
       </div>
       <button
         onClick={signInWithGoogle}
@@ -30,7 +36,7 @@ export default function LoginPage() {
           <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
           <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
         </svg>
-        Google로 계속하기
+        {t('continueWithGoogle')}
       </button>
     </main>
   )

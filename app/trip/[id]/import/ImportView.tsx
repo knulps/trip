@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import type { Trip, Day } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import { generateKeyBetween } from 'fractional-indexing'
@@ -41,6 +42,9 @@ function parseCSVLine(line: string): string[] {
 
 function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
   const router = useRouter()
+  const t = useTranslations('trip.import')
+  const tRoot = useTranslations()
+  const dayNames = tRoot.raw('days') as string[]
 
   const [parsedPlaces, setParsedPlaces] = useState<ParsedPlace[]>([])
   const [selectedDayId, setSelectedDayId] = useState<string>(days[0]?.id ?? '')
@@ -53,7 +57,7 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
     if (idx === -1) return ''
     const day = days[idx]
     const date = new Date(day.date + 'T00:00:00')
-    const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
+    const dayOfWeek = dayNames[date.getDay()]
     return `Day ${idx + 1} (${date.getMonth() + 1}/${date.getDate()} ${dayOfWeek})`
   }
 
@@ -159,13 +163,13 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
     const skipped = toImport.length - filtered.length
 
     if (filtered.length === 0) {
-      alert(`선택한 장소 ${toImport.length}개 모두 이미 추가되어 있습니다.`)
+      alert(t('allDuplicates', { count: toImport.length }))
       setImporting(false)
       return
     }
 
     if (skipped > 0) {
-      alert(`중복 ${skipped}개 스킵, ${filtered.length}개 추가합니다.`)
+      alert(t('partialDuplicates', { skipped, count: filtered.length }))
     }
 
     const { data: lastPlaces } = await supabase
@@ -213,13 +217,13 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
     <main className="flex flex-col h-full">
       <header className="flex items-center gap-3 px-4 pb-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
         <Link href={`/trip/${trip.id}`} className="text-gray-400 text-lg">&#8249;</Link>
-        <h1 className="text-base font-semibold">장소 가져오기</h1>
+        <h1 className="text-base font-semibold">{t('title')}</h1>
       </header>
 
       <div className="flex flex-col gap-4 px-4 flex-1 overflow-y-auto pb-4">
         {/* 파일 업로드 */}
         <div>
-          <label className="text-xs text-gray-500">CSV 파일 선택</label>
+          <label className="text-xs text-gray-500">{t('csvSelect')}</label>
           <input
             type="file"
             accept=".csv"
@@ -239,7 +243,7 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
               >
                 {days.map((day, i) => {
                   const date = new Date(day.date + 'T00:00:00')
-                  const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
+                  const dayOfWeek = dayNames[date.getDay()]
                   return (
                     <option key={day.id} value={day.id}>
                       Day {i + 1} - {date.getMonth() + 1}/{date.getDate()} {dayOfWeek}
@@ -254,7 +258,7 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
                 }}
                 className="shrink-0 rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600"
               >
-                {parsedPlaces.filter(p => !p.added).every(p => p.selected) ? '전체 해제' : '전체 선택'}
+                {parsedPlaces.filter(p => !p.added).every(p => p.selected) ? t('deselectAll') : t('selectAll')}
               </button>
             </div>
 
@@ -267,7 +271,7 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
                     disabled={resolving}
                     className="flex-1 rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white disabled:opacity-50"
                   >
-                    {resolving ? `좌표 검색 중... (${progress.current}/${progress.total})` : `${selectedCount}개 좌표 검색`}
+                    {resolving ? t('resolving', { current: progress.current, total: progress.total }) : t('resolveCoords', { count: selectedCount })}
                   </button>
                 )}
                 {canImport && (
@@ -276,7 +280,7 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
                     disabled={importing}
                     className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white disabled:opacity-50"
                   >
-                    {importing ? '추가 중...' : `${parsedPlaces.filter(p => p.selected && p.resolved && p.lat && !p.added).length}개 추가`}
+                    {importing ? t('adding') : t('addItems', { count: parsedPlaces.filter(p => p.selected && p.resolved && p.lat && !p.added).length })}
                   </button>
                 )}
               </div>
@@ -288,14 +292,14 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
                 onClick={() => router.push(`/trip/${trip.id}`)}
                 className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-medium text-white"
               >
-                완료 - 여행으로 돌아가기
+                {t('finish')}
               </button>
             )}
 
             {/* 장소 리스트 */}
             <p className="text-xs text-gray-400">
-              {selectableCount}개 중 {selectedCount}개 선택
-              {parsedPlaces.some(p => p.added) && ` · ${parsedPlaces.filter(p => p.added).length}개 추가 완료`}
+              {t('selectionStatus', { total: selectableCount, selected: selectedCount })}
+              {parsedPlaces.some(p => p.added) && ` · ${t('addedCount', { count: parsedPlaces.filter(p => p.added).length })}`}
             </p>
             <div className="flex flex-col divide-y divide-gray-50">
               {parsedPlaces.map((place, i) => (
@@ -319,11 +323,11 @@ function ImportViewInner({ trip, days }: { trip: Trip; days: Day[] }) {
                     <p className="text-sm font-medium truncate">{place.name}</p>
                     {place.memo && <p className="text-xs text-gray-400 truncate">{place.memo}</p>}
                     {place.added ? (
-                      <p className="text-xs text-blue-500">&#10003; {place.addedToDay}에 추가됨</p>
+                      <p className="text-xs text-blue-500">{t('addedToDay', { day: place.addedToDay })}</p>
                     ) : place.resolved && place.lat ? (
                       <p className="text-xs text-green-500 truncate">&#10003; {place.address}</p>
                     ) : place.resolved && !place.lat ? (
-                      <p className="text-xs text-red-400">&#10007; 좌표를 찾을 수 없음</p>
+                      <p className="text-xs text-red-400">{t('coordsNotFound')}</p>
                     ) : null}
                   </div>
                 </div>

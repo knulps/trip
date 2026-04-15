@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useTranslations } from 'next-intl'
 import type { Place, Day } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
@@ -52,6 +53,8 @@ function PlaceItem({
   isRouteOrigin?: boolean
   isRouteDest?: boolean
 }) {
+  const t = useTranslations('trip.placeList')
+
   return (
     <li className={`flex items-center gap-3 py-3 transition-all ${
       isRouteOrigin ? 'border-l-4 border-green-500 pl-2 -ml-2' :
@@ -73,7 +76,7 @@ function PlaceItem({
       <button
         onClick={() => onFocus?.(place)}
         className="shrink-0 text-gray-300 transition-colors hover:text-blue-400 active:text-blue-600"
-        aria-label="지도에서 보기"
+        aria-label={t('viewOnMap')}
       >
         📍
       </button>
@@ -82,7 +85,7 @@ function PlaceItem({
         target="_blank"
         rel="noopener noreferrer"
         className="shrink-0 text-gray-300 transition-colors hover:text-green-400 active:text-green-600"
-        aria-label="길찾기"
+        aria-label={t('directions')}
       >
         ↗
       </a>
@@ -100,6 +103,8 @@ function SortablePlaceItem({
   index: number
   onDelete: (id: string) => void
 }) {
+  const t = useTranslations('trip.placeList')
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: place.id,
   })
@@ -116,7 +121,7 @@ function SortablePlaceItem({
         {...attributes}
         {...listeners}
         className="shrink-0 cursor-grab text-gray-300 active:cursor-grabbing"
-        aria-label="드래그 핸들"
+        aria-label={t('dragHandle')}
         style={{ touchAction: 'none' }}
       >
         ⠿
@@ -134,7 +139,7 @@ function SortablePlaceItem({
       <button
         onClick={() => onDelete(place.id)}
         className="shrink-0 text-gray-300 transition-colors hover:text-red-400 active:text-red-600"
-        aria-label="장소 삭제"
+        aria-label={t('deletePlace')}
       >
         ✕
       </button>
@@ -150,6 +155,7 @@ function DraggableDayPlaces({
   places: Place[]
   onRefresh: () => void
 }) {
+  const t = useTranslations('trip.placeList')
   const supabase = createClient()
   const [localPlaces, setLocalPlaces] = useState(places)
 
@@ -163,10 +169,10 @@ function DraggableDayPlaces({
   )
 
   const deletePlace = useCallback(async (id: string) => {
-    if (!window.confirm('이 장소를 삭제할까요?')) return
+    if (!window.confirm(t('confirmDelete'))) return
     await supabase.from('places').delete().eq('id', id)
     onRefresh()
-  }, [supabase, onRefresh])
+  }, [supabase, onRefresh, t])
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -206,12 +212,15 @@ function DraggableDayPlaces({
 
 /* ── Main PlaceList ── */
 export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onSelectRoute, dayRefs, activeRoutePlaceIds }: Props) {
+  const t = useTranslations('trip.placeList')
+  const tRoot = useTranslations()
+  const days_arr = tRoot.raw('days') as string[]
   const [editingPlace, setEditingPlace] = useState<Place | null>(null)
 
   if (days.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-        <p className="text-sm text-gray-400">날짜를 선택하거나 추가해주세요</p>
+        <p className="text-sm text-gray-400">{t('selectDay')}</p>
       </div>
     )
   }
@@ -221,7 +230,7 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
       <div className="flex flex-col">
         {days.map((day, dayIndex) => {
           const date = new Date(day.date + 'T00:00:00')
-          const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
+          const dayOfWeek = days_arr[date.getDay()]
           const dateLabel = `${date.getMonth() + 1}/${date.getDate()} ${dayOfWeek}`
 
           return (
@@ -239,20 +248,20 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
                     Day {dayIndex + 1}{' '}
                     <span className="text-xs font-normal text-gray-400">{dateLabel}</span>
                     <span className="ml-1.5 text-xs font-normal text-gray-400">
-                      · {day.places.length}개 장소
+                      · {t('placeCount', { count: day.places.length })}
                     </span>
                   </span>
                   {editMode && day.places.length > 0 && (
                     <button
                       onClick={async () => {
-                        if (!window.confirm(`Day ${dayIndex + 1}의 장소 ${day.places.length}개를 모두 삭제할까요?`)) return
+                        if (!window.confirm(t('confirmDeleteAll', { day: dayIndex + 1, count: day.places.length }))) return
                         const supabase = createClient()
                         await supabase.from('places').delete().eq('day_id', day.id)
                         onRefresh()
                       }}
                       className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700"
                     >
-                      전체 삭제
+                      {t('deleteAll')}
                     </button>
                   )}
                   {!editMode && (
@@ -260,7 +269,7 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
                       href={`/trip/add?dayId=${day.id}`}
                       className="rounded-lg bg-gray-900 px-3.5 py-1.5 text-xs font-medium text-white"
                     >
-                      + 장소 추가
+                      {t('addPlace')}
                     </Link>
                   )}
                 </div>
@@ -269,7 +278,7 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
               {/* Places */}
               {day.places.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 py-6 text-center">
-                  <p className="text-sm text-gray-400">아직 장소가 없어요</p>
+                  <p className="text-sm text-gray-400">{t('empty')}</p>
                 </div>
               ) : editMode ? (
                 <DraggableDayPlaces places={day.places} onRefresh={onRefresh} />

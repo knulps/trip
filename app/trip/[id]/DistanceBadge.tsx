@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import type { Place } from '@/types/supabase'
+import { useTranslations } from 'next-intl'
 
 interface DistanceResult {
   mode: string
@@ -18,6 +19,7 @@ interface DistanceBadgeProps {
 const cache = new Map<string, DistanceResult[] | null>()
 
 export default function DistanceBadge({ from, to, onSelectRoute }: DistanceBadgeProps) {
+  const t = useTranslations('trip.view')
   const [results, setResults] = useState<DistanceResult[] | null | undefined>(undefined)
   const cacheKey = `${from.id}:${to.id}`
 
@@ -57,7 +59,7 @@ export default function DistanceBadge({ from, to, onSelectRoute }: DistanceBadge
           onClick={() => onSelectRoute?.({ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }, r.mode, from.id, to.id)}
           className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 active:bg-blue-100"
         >
-          {r.icon} {r.minutes}분
+          {r.icon} {r.minutes}{t('minutes')}
         </button>
       ))}
     </div>

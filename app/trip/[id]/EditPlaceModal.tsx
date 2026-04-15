@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 import type { Place, Day } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import { generateKeyBetween } from 'fractional-indexing'
@@ -13,6 +14,11 @@ interface Props {
 }
 
 export default function EditPlaceModal({ place, days, onClose, onSave }: Props) {
+  const t = useTranslations('trip.editPlace')
+  const tCommon = useTranslations('common')
+  const tRoot = useTranslations()
+  const days_arr = tRoot.raw('days') as string[]
+
   const [name, setName] = useState(place.name)
   const [visitTime, setVisitTime] = useState(place.visit_time?.slice(0, 5) ?? '')
   const [memo, setMemo] = useState(place.memo ?? '')
@@ -85,12 +91,12 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 text-base font-semibold text-gray-900">
-          장소 수정
+          {t('title')}
         </h2>
 
         <div className="mb-4 flex flex-col gap-1.5">
           <label className="text-xs font-medium text-gray-500">
-            장소 이름
+            {t('nameLabel')}
           </label>
           <input
             type="text"
@@ -103,7 +109,7 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
         {days && days.length > 1 && (
           <div className="mb-4 flex flex-col gap-1.5">
             <label className="text-xs font-medium text-gray-500">
-              날짜 이동
+              {t('moveDate')}
             </label>
             <select
               value={selectedDayId}
@@ -112,11 +118,11 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
             >
               {days.map((day, i) => {
                 const date = new Date(day.date + 'T00:00:00')
-                const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
+                const dayOfWeek = days_arr[date.getDay()]
                 return (
                   <option key={day.id} value={day.id}>
                     Day {i + 1} - {date.getMonth() + 1}/{date.getDate()} {dayOfWeek}
-                    {day.id === place.day_id ? ' (현재)' : ''}
+                    {day.id === place.day_id ? ` ${t('current')}` : ''}
                   </option>
                 )
               })}
@@ -126,7 +132,7 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
 
         <div className="mb-4 flex flex-col gap-1.5">
           <label className="text-xs font-medium text-gray-500">
-            방문 시간
+            {t('visitTime')}
           </label>
           <input
             type="time"
@@ -138,7 +144,7 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
 
         <div className="mb-6 flex flex-col gap-1.5">
           <label className="text-xs font-medium text-gray-500">
-            메모
+            {t('memo')}
           </label>
           <textarea
             rows={3}
@@ -153,14 +159,14 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
             onClick={onClose}
             className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-600"
           >
-            취소
+            {tCommon('cancel')}
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
             className="flex-1 rounded-lg bg-gray-900 py-2.5 text-sm font-medium text-white disabled:opacity-50"
           >
-            {saving ? '저장 중...' : dayChanged ? '이동 + 저장' : '저장'}
+            {saving ? t('submitting') : dayChanged ? t('submitMove') : t('submit')}
           </button>
         </div>
       </div>

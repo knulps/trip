@@ -1,12 +1,14 @@
 'use client'
 
-import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef, useTransition } from 'react'
 import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
 import type { Trip, Day, Place } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import PlaceList from './PlaceList'
 import EditPlaceModal from './EditPlaceModal'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useTranslations, useLocale } from 'next-intl'
 
 interface RouteSegment {
   type: 'WALK' | 'TRANSIT'
@@ -31,6 +33,12 @@ interface Props {
 }
 
 export default function TripView({ trip, days: initialDays, userId: _userId }: Props) {
+  const t = useTranslations('trip.view')
+  const tCommon = useTranslations('common')
+  const tNav = useTranslations('nav')
+  const tRoot = useTranslations()
+  const dayNames = tRoot.raw('days') as string[]
+
   const [days, setDays] = useState(initialDays)
   const [selectedDayId, setSelectedDayId] = useState(initialDays[0]?.id ?? null)
   const [focusedPlaceId, setFocusedPlaceId] = useState<string | null>(null)
@@ -192,7 +200,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
   function requestCurrentLocation() {
     navigator.geolocation.getCurrentPosition(
       (pos) => setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => alert('위치 정보를 가져올 수 없습니다.'),
+      () => alert(t('locationError')),
       { enableHighAccuracy: true }
     )
   }
@@ -202,9 +210,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
     if (!day) return
 
     if (day.places.length > 0) {
-      const confirmed = window.confirm(
-        `이 날의 장소 ${day.places.length}개도 함께 삭제됩니다. 계속할까요?`
-      )
+      const confirmed = window.confirm(t('deleteDay', { count: day.places.length }))
       if (!confirmed) return
     }
 
@@ -291,12 +297,12 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
               : 'bg-gray-100 text-gray-600'
           }`}
         >
-          {editMode ? '완료' : '편집'}
+          {editMode ? tCommon('done') : tCommon('edit')}
         </button>
         <div className={`flex gap-2 overflow-x-auto scrollbar-hide ${editMode ? 'pt-2' : ''}`}>
           {days.map((day, i) => {
             const date = new Date(day.date + 'T00:00:00')
-            const dayOfWeek = ['일','월','화','수','목','금','토'][date.getDay()]
+            const dayOfWeek = dayNames[date.getDay()]
             const dateLabel = `${date.getMonth() + 1}/${date.getDate()} ${dayOfWeek}`
             const isOnly = days.length === 1
 
@@ -317,7 +323,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                 </button>
                 {editMode && !isOnly && (
                   <button
-                    aria-label="날짜 삭제"
+                    aria-label={t('deleteDate')}
                     onClick={() => deleteDay(day.id)}
                     className="absolute -top-2 -right-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-[9px] text-white active:bg-red-700"
                   >
@@ -399,12 +405,12 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
           )}
           {activeRoute?.origin && (
             <AdvancedMarker position={activeRoute.origin}>
-              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-white text-[10px] font-bold shadow-md">출</div>
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-green-500 text-white text-[10px] font-bold shadow-md">{t('departure')}</div>
             </AdvancedMarker>
           )}
           {activeRoute?.destination && (
             <AdvancedMarker position={activeRoute.destination}>
-              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-[10px] font-bold shadow-md">도</div>
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-red-500 text-white text-[10px] font-bold shadow-md">{t('arrival')}</div>
             </AdvancedMarker>
           )}
         </Map>
@@ -426,12 +432,12 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
               rel="noopener noreferrer"
               className="inline-flex items-center gap-0.5 rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-100 active:bg-blue-200"
             >
-              구글맵 ↗
+              {t('googleMaps')}
             </a>
             <button
               onClick={() => setClickedPoi(null)}
               className="text-gray-400 hover:text-gray-600 text-sm px-1"
-              aria-label="닫기"
+              aria-label={tCommon('close')}
             >
               ✕
             </button>
@@ -458,7 +464,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
               onClick={() => { setMapFocusMode(false); setActiveRoute(null) }}
               className="text-gray-400 text-sm"
             >
-              ← 목록
+              {tNav('backToList')}
             </button>
           </div>
           {focusedPlace && (
@@ -469,7 +475,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                 <button
                   onClick={() => setEditingPlace(focusedPlace)}
                   className="shrink-0 text-gray-300 transition-colors hover:text-gray-500 active:text-gray-700"
-                  aria-label="수정"
+                  aria-label={tCommon('edit')}
                 >
                   ✏️
                 </button>
@@ -478,7 +484,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                   target="_blank"
                   rel="noopener noreferrer"
                   className="shrink-0 text-gray-300 transition-colors hover:text-blue-400 active:text-blue-600"
-                  aria-label="지도에서 보기"
+                  aria-label={t('viewOnMap')}
                 >
                   📍
                 </a>
@@ -487,7 +493,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                   target="_blank"
                   rel="noopener noreferrer"
                   className="shrink-0 text-gray-300 transition-colors hover:text-green-400 active:text-green-600"
-                  aria-label="길찾기"
+                  aria-label={t('directions')}
                 >
                   ↗
                 </a>
@@ -509,7 +515,7 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
                 onClick={requestCurrentLocation}
                 className="text-xs text-blue-600 py-1"
               >
-                📍 현위치에서 거리 확인
+                {t('checkDistanceFromHere')}
               </button>
               {currentLocation && (
                 <CurrentLocationDistance
@@ -555,8 +561,13 @@ export default function TripView({ trip, days: initialDays, userId: _userId }: P
 
 // 헤더 더보기 메뉴 (가져오기 + 초대)
 function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: string }) {
+  const tCommon = useTranslations('common')
+  const tNav = useTranslations('nav')
+  const locale = useLocale()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [isPending, startTransition] = useTransition()
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -567,6 +578,12 @@ function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: stri
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
+
+  function toggleLocale() {
+    const next = locale === 'ko' ? 'en' : 'ko'
+    document.cookie = `NEXT_LOCALE=${next}; path=/; max-age=31536000; SameSite=Lax`
+    startTransition(() => { router.refresh(); setOpen(false) })
+  }
 
   async function copyInviteLink() {
     const url = `${window.location.origin}/invite/${inviteToken}`
@@ -580,7 +597,7 @@ function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: stri
       <button
         onClick={() => setOpen(v => !v)}
         className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 active:bg-gray-200 text-lg leading-none"
-        aria-label="더보기"
+        aria-label={tNav('moreMenu')}
       >
         ⋮
       </button>
@@ -591,13 +608,20 @@ function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: stri
             className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100"
             onClick={() => setOpen(false)}
           >
-            가져오기
+            {tNav('import')}
           </Link>
           <button
             onClick={copyInviteLink}
             className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100"
           >
-            {copied ? '복사됨 ✓' : '초대 링크 복사'}
+            {copied ? tCommon('copied') : tNav('copyInviteLink')}
+          </button>
+          <button
+            onClick={toggleLocale}
+            disabled={isPending}
+            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50"
+          >
+            {locale === 'ko' ? '🌐 English' : '🌐 한국어'}
           </button>
         </div>
       )}
@@ -607,6 +631,7 @@ function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: stri
 
 // 날짜 추가 버튼
 function AddDayButton({ tripId, onAdded }: { tripId: string; onAdded: () => void }) {
+  const t = useTranslations('trip.view')
   const supabase = createClient()
 
   async function addDay() {
@@ -633,7 +658,7 @@ function AddDayButton({ tripId, onAdded }: { tripId: string; onAdded: () => void
       onClick={addDay}
       className="shrink-0 rounded-full bg-gray-100 px-3.5 py-1.5 text-xs font-medium text-gray-500"
     >
-      + 날짜
+      {t('addDate')}
     </button>
   )
 }
@@ -886,6 +911,8 @@ function TransitStepsBar({
   destination?: { lat: number; lng: number }
   onDismiss: () => void
 }) {
+  const t = useTranslations('trip.view')
+  const tCommon = useTranslations('common')
   const vehicleEmoji: Record<string, string> = {
     SUBWAY: '\u{1F687}',
     BUS: '\u{1F68C}',
@@ -933,7 +960,7 @@ function TransitStepsBar({
                   <span key={i} className="contents">
                     {i > 0 && <span className="text-gray-300 mx-0.5">{'\u2192'}</span>}
                     <span className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 bg-gray-100 text-gray-500 text-[11px] font-medium">
-                      {'\u{1F6B6}'} {'\uB3C4\uBCF4'}
+                      {'\u{1F6B6}'} {t('walking')}
                     </span>
                   </span>
                 )
@@ -947,7 +974,7 @@ function TransitStepsBar({
                     className="inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-white text-[11px] font-medium"
                     style={{ backgroundColor: seg.color }}
                   >
-                    {emoji} {label} {'\u00B7'} {seg.stopCount}{'\uC815\uAC70\uC7A5'}
+                    {emoji} {label} {'\u00B7'} {seg.stopCount}{t('stops')}
                   </span>
                 </span>
               )
@@ -962,13 +989,13 @@ function TransitStepsBar({
               rel="noopener noreferrer"
               className="inline-flex items-center gap-0.5 rounded-md bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-600 hover:bg-blue-100 active:bg-blue-200"
             >
-              구글맵 ↗
+              {t('googleMaps')}
             </a>
           )}
           <button
             onClick={onDismiss}
             className="text-gray-400 hover:text-gray-600 text-sm px-1"
-            aria-label="닫기"
+            aria-label={tCommon('close')}
           >
             {'\u2715'}
           </button>
@@ -988,6 +1015,8 @@ function CurrentLocationDistance({
   to: Place
   onSelectRoute?: (mode: string) => void
 }) {
+  const t = useTranslations('trip.view')
+  const tCommon = useTranslations('common')
   const [results, setResults] = useState<Array<{ mode: string; minutes: number; distance: string; icon: string }> | null>(null)
 
   useEffect(() => {
@@ -1006,7 +1035,7 @@ function CurrentLocationDistance({
       .catch(() => {})
   }, [from.lat, from.lng, to.lat, to.lng])
 
-  if (!results) return <p className="text-[10px] text-gray-400 mt-1">계산 중...</p>
+  if (!results) return <p className="text-[10px] text-gray-400 mt-1">{tCommon('loading')}</p>
 
   return (
     <div className="flex items-center gap-2 mt-1">
@@ -1016,7 +1045,7 @@ function CurrentLocationDistance({
           onClick={() => onSelectRoute?.(r.mode)}
           className="inline-flex items-center gap-0.5 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-500 active:bg-blue-100"
         >
-          {r.icon} {r.minutes}분 · {r.distance}
+          {r.icon} {r.minutes}{t('minutesDot')}{r.distance}
         </button>
       ))}
     </div>

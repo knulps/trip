@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: '여행 일정',
-    short_name: '여행',
-    description: '여행 일정 관리 앱',
+    name: 'Trip Planner',
+    short_name: 'Trips',
+    description: 'Plan trips together with friends',
     start_url: '/',
     display: 'standalone',
     background_color: '#ffffff',

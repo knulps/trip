@@ -1,0 +1,112 @@
+{
+  "common": {
+    "save": "Save",
+    "saving": "Saving...",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "done": "Done",
+    "close": "Close",
+    "delete": "Delete",
+    "loading": "Loading...",
+    "copied": "Copied ✓"
+  },
+  "nav": {
+    "backToList": "← List",
+    "moreMenu": "More",
+    "import": "Import",
+    "copyInviteLink": "Copy invite link"
+  },
+  "home": {
+    "title": "Trips",
+    "newTrip": "New trip",
+    "empty": "No trips yet",
+    "createFirst": "Create your first trip"
+  },
+  "auth": {
+    "tagline": "Plan trips together with friends",
+    "continueWithGoogle": "Continue with Google"
+  },
+  "trip": {
+    "new": {
+      "title": "New Trip",
+      "nameLabel": "Trip name",
+      "namePlaceholder": "e.g. Paris trip",
+      "startDate": "Start date",
+      "endDate": "End date",
+      "submit": "Create trip",
+      "submitting": "Creating..."
+    },
+    "addPlace": {
+      "title": "Add Place",
+      "searchPlaceholder": "Search places (e.g. Eiffel Tower, Louvre)",
+      "visitTime": "Visit time (optional)",
+      "memo": "Note (optional)",
+      "memoPlaceholder": "Add a note",
+      "submit": "Add to itinerary",
+      "submitting": "Saving..."
+    },
+    "editPlace": {
+      "title": "Edit Place",
+      "nameLabel": "Place name",
+      "moveDate": "Move to day",
+      "current": "(current)",
+      "visitTime": "Visit time",
+      "memo": "Note",
+      "submitMove": "Move + Save",
+      "submit": "Save",
+      "submitting": "Saving..."
+    },
+    "view": {
+      "addDate": "+ Day",
+      "deleteDate": "Delete day",
+      "departure": "S",
+      "arrival": "E",
+      "editMap": "Edit",
+      "viewOnMap": "View on map",
+      "directions": "Directions",
+      "googleMaps": "Google Maps ↗",
+      "checkDistanceFromHere": "📍 Distance from here",
+      "deleteDay": "This will also delete {count} place(s) in this day. Continue?",
+      "walking": "Walk",
+      "minutes": "min",
+      "minutesDot": "min · ",
+      "stops": "stops",
+      "locationError": "Unable to get your location."
+    },
+    "placeList": {
+      "addPlace": "+ Add place",
+      "empty": "No places yet",
+      "selectDay": "Select or add a day",
+      "placeCount": "{count} place(s)",
+      "dragHandle": "Drag handle",
+      "viewOnMap": "View on map",
+      "directions": "Directions",
+      "deletePlace": "Delete place",
+      "confirmDelete": "Delete this place?",
+      "deleteAll": "Delete all",
+      "confirmDeleteAll": "Delete all {count} place(s) in Day {day}?"
+    },
+    "import": {
+      "title": "Import Places",
+      "csvSelect": "Select CSV file",
+      "selectAll": "Select all",
+      "deselectAll": "Deselect all",
+      "resolveCoords": "Resolve {count} coordinates",
+      "resolving": "Resolving... ({current}/{total})",
+      "addItems": "Add {count} place(s)",
+      "adding": "Adding...",
+      "finish": "Done — back to trip",
+      "selectionStatus": "{selected} of {total} selected",
+      "addedCount": "{count} added",
+      "addedToDay": "✓ Added to {day}",
+      "coordsNotFound": "✗ Coordinates not found",
+      "allDuplicates": "All {count} selected place(s) are already added.",
+      "partialDuplicates": "Skipping {skipped} duplicate(s), adding {count}."
+    }
+  },
+  "days": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+  "metadata": {
+    "title": "Trip Planner",
+    "description": "Plan trips together with friends"
+  }
+}

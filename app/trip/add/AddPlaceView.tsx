@@ -5,6 +5,7 @@ import { APIProvider, useMapsLibrary } from '@vis.gl/react-google-maps'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { generateKeyBetween } from 'fractional-indexing'
+import { useTranslations } from 'next-intl'
 
 interface PlaceResult {
   name: string
@@ -14,6 +15,7 @@ interface PlaceResult {
 }
 
 function AddPlaceViewInner() {
+  const t = useTranslations('trip.addPlace')
   const searchParams = useSearchParams()
   const dayId = searchParams.get('dayId')
   const router = useRouter()
@@ -85,7 +87,7 @@ function AddPlaceViewInner() {
         <button onClick={() => router.back()} className="text-gray-400 text-lg">
           ‹
         </button>
-        <h1 className="text-base font-semibold">장소 추가</h1>
+        <h1 className="text-base font-semibold">{t('title')}</h1>
       </header>
 
       <div className="flex flex-col gap-4 px-4">
@@ -93,7 +95,7 @@ function AddPlaceViewInner() {
           <input
             ref={inputRef}
             type="text"
-            placeholder="장소 검색 (예: 에펠탑, 루브르 박물관)"
+            placeholder={t('searchPlaceholder')}
             className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors"
           />
         </div>
@@ -109,7 +111,7 @@ function AddPlaceViewInner() {
         )}
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-500">방문 시간 (선택)</label>
+          <label className="text-xs text-gray-500">{t('visitTime')}</label>
           <input
             type="time"
             value={visitTime}
@@ -119,12 +121,12 @@ function AddPlaceViewInner() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-gray-500">메모 (선택)</label>
+          <label className="text-xs text-gray-500">{t('memo')}</label>
           <textarea
             rows={3}
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
-            placeholder="메모를 입력하세요"
+            placeholder={t('memoPlaceholder')}
             className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:border-gray-400 focus:bg-white transition-colors"
           />
         </div>
@@ -134,7 +136,7 @@ function AddPlaceViewInner() {
           disabled={!selected || saving}
           className="w-full rounded-xl bg-gray-900 py-3 text-sm font-medium text-white disabled:opacity-40 transition-opacity"
         >
-          {saving ? '저장 중...' : '일정에 추가'}
+          {saving ? t('submitting') : t('submit')}
         </button>
       </div>
     </main>

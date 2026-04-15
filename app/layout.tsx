@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
+import { NextIntlClientProvider } from 'next-intl'
+import { getMessages, getLocale } from 'next-intl/server'
 import './globals.css'
 
 const geist = Geist({
@@ -8,12 +10,12 @@ const geist = Geist({
 })
 
 export const metadata: Metadata = {
-  title: '여행 일정',
-  description: '지인들과 함께 만드는 여행 일정',
+  title: 'Trip Planner',
+  description: 'Plan trips together with friends',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: '여행 일정',
+    title: 'Trip Planner',
   },
 }
 
@@ -26,18 +28,23 @@ export const viewport: Viewport = {
   themeColor: '#111827',
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const locale = await getLocale()
+  const messages = await getMessages()
+
   return (
-    <html lang="ko" className={`${geist.variable} h-full antialiased`}>
+    <html lang={locale} className={`${geist.variable} h-full antialiased`}>
       <head>
         <link rel="apple-touch-icon" href="/icon.svg" />
       </head>
       <body className="h-full bg-white text-gray-900" style={{ colorScheme: 'light' }}>
-        {children}
+        <NextIntlClientProvider messages={messages}>
+          {children}
+        </NextIntlClientProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}`,

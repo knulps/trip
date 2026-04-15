@@ -1,0 +1,112 @@
+{
+  "common": {
+    "save": "저장",
+    "saving": "저장 중...",
+    "cancel": "취소",
+    "edit": "편집",
+    "done": "완료",
+    "close": "닫기",
+    "delete": "삭제",
+    "loading": "계산 중...",
+    "copied": "복사됨 ✓"
+  },
+  "nav": {
+    "backToList": "← 목록",
+    "moreMenu": "더보기",
+    "import": "가져오기",
+    "copyInviteLink": "초대 링크 복사"
+  },
+  "home": {
+    "title": "여행",
+    "newTrip": "새 여행 만들기",
+    "empty": "아직 여행이 없어요",
+    "createFirst": "첫 여행 만들기"
+  },
+  "auth": {
+    "tagline": "지인들과 함께 만드는 여행 일정",
+    "continueWithGoogle": "Google로 계속하기"
+  },
+  "trip": {
+    "new": {
+      "title": "새 여행",
+      "nameLabel": "여행 이름",
+      "namePlaceholder": "예: 파리 여행",
+      "startDate": "시작일",
+      "endDate": "종료일",
+      "submit": "여행 만들기",
+      "submitting": "만드는 중..."
+    },
+    "addPlace": {
+      "title": "장소 추가",
+      "searchPlaceholder": "장소 검색 (예: 에펠탑, 루브르 박물관)",
+      "visitTime": "방문 시간 (선택)",
+      "memo": "메모 (선택)",
+      "memoPlaceholder": "메모를 입력하세요",
+      "submit": "일정에 추가",
+      "submitting": "저장 중..."
+    },
+    "editPlace": {
+      "title": "장소 수정",
+      "nameLabel": "장소 이름",
+      "moveDate": "날짜 이동",
+      "current": "(현재)",
+      "visitTime": "방문 시간",
+      "memo": "메모",
+      "submitMove": "이동 + 저장",
+      "submit": "저장",
+      "submitting": "저장 중..."
+    },
+    "view": {
+      "addDate": "+ 날짜",
+      "deleteDate": "날짜 삭제",
+      "departure": "출",
+      "arrival": "도",
+      "editMap": "수정",
+      "viewOnMap": "지도에서 보기",
+      "directions": "길찾기",
+      "googleMaps": "구글맵 ↗",
+      "checkDistanceFromHere": "📍 현위치에서 거리 확인",
+      "deleteDay": "이 날의 장소 {count}개도 함께 삭제됩니다. 계속할까요?",
+      "walking": "도보",
+      "minutes": "분",
+      "minutesDot": "분 · ",
+      "stops": "정거장",
+      "locationError": "위치 정보를 가져올 수 없습니다."
+    },
+    "placeList": {
+      "addPlace": "+ 장소 추가",
+      "empty": "아직 장소가 없어요",
+      "selectDay": "날짜를 선택하거나 추가해주세요",
+      "placeCount": "{count}개 장소",
+      "dragHandle": "드래그 핸들",
+      "viewOnMap": "지도에서 보기",
+      "directions": "길찾기",
+      "deletePlace": "장소 삭제",
+      "confirmDelete": "이 장소를 삭제할까요?",
+      "deleteAll": "전체 삭제",
+      "confirmDeleteAll": "Day {day}의 장소 {count}개를 모두 삭제할까요?"
+    },
+    "import": {
+      "title": "장소 가져오기",
+      "csvSelect": "CSV 파일 선택",
+      "selectAll": "전체 선택",
+      "deselectAll": "전체 해제",
+      "resolveCoords": "{count}개 좌표 검색",
+      "resolving": "좌표 검색 중... ({current}/{total})",
+      "addItems": "{count}개 추가",
+      "adding": "추가 중...",
+      "finish": "완료 - 여행으로 돌아가기",
+      "selectionStatus": "{total}개 중 {selected}개 선택",
+      "addedCount": "{count}개 추가 완료",
+      "addedToDay": "✓ {day}에 추가됨",
+      "coordsNotFound": "✗ 좌표를 찾을 수 없음",
+      "allDuplicates": "선택한 장소 {count}개 모두 이미 추가되어 있습니다.",
+      "partialDuplicates": "중복 {skipped}개 스킵, {count}개 추가합니다."
+    }
+  },
+  "days": ["일", "월", "화", "수", "목", "금", "토"],
+  "metadata": {
+    "title": "여행 일정",
+    "description": "지인들과 함께 만드는 여행 일정"
+  }
+}
