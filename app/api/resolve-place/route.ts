@@ -97,11 +97,18 @@ async function readCappedText(res: Response): Promise<string> {
   return text
 }
 
+// 2차 단계의 결과. 실패했을 때 그것이 '이 링크로는 원래 안 되는 것'(transient: false)인지
+// '이번 호출이 안 된 것'(transient: true)인지 구분한다.
+// 구분하지 않으면 일시 장애가 3차까지 내려가 '좌표 없음'(404)으로 굳어 되살릴 수 없다.
+type GooglePageResult =
+  | { ok: true; finalUrl: string; html: string }
+  | { ok: false; transient: boolean }
+
 /**
  * Google 단축 링크는 리다이렉트되므로 hop 마다 수동으로 호스트를 다시 검사한다.
  * redirect: 'follow' 를 쓰면 검사 없이 임의 호스트로 끌려갈 수 있다.
  */
-async function fetchGooglePage(start: URL): Promise<{ finalUrl: string; html: string } | null> {
+async function fetchGooglePage(start: URL): Promise<GooglePageResult> {
   let current = start
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const res = await fetch(current, {
@@ -112,18 +119,31 @@ async function fetchGooglePage(start: URL): Promise<{ finalUrl: string; html: st
 
     if (res.status >= 300 && res.status < 400) {
       const location = res.headers.get('location')
-      if (!location) return null
+      if (!location) return { ok: false, transient: false }
       const next = allowedGoogleUrl(location, current)
-      if (!next) return null // 허용 목록 밖으로 나가는 리다이렉트는 따라가지 않는다
+      // 허용 목록 밖으로 나가는 리다이렉트는 따라가지 않는다 (다시 시도해도 마찬가지다)
+      if (!next) return { ok: false, transient: false }
       current = next
       continue
     }
 
-    if (!res.ok) return null
-    return { finalUrl: current.toString(), html: await readCappedText(res) }
+    // 5xx 와 429 는 다시 시도하면 될 수 있다. 404 같은 응답은 재시도해도 같다.
+    if (!res.ok) return { ok: false, transient: res.status >= 500 || res.status === 429 }
+    return { ok: true, finalUrl: current.toString(), html: await readCappedText(res) }
   }
-  return null
+  return { ok: false, transient: false } // hop 초과
 }
+
+// Google Places API 가 HTTP 200 으로 내려보내는 실패 상태.
+// '그런 장소가 없다'(ZERO_RESULTS)가 아니라 '이번 호출이 되지 않았다'는 뜻이라
+// 못 찾음(404)이 아니라 재시도 대상으로 다뤄야 한다.
+// REQUEST_DENIED 는 키에 Places API 가 안 켜져 있을 때도 나오는데,
+// 그걸 못 찾음으로 기록하면 CSV 전체가 '좌표 없음'으로 굳어 되살릴 방법이 없어진다.
+const RETRYABLE_PLACE_STATUSES = new Set([
+  'OVER_QUERY_LIMIT',
+  'REQUEST_DENIED',
+  'UNKNOWN_ERROR',
+])
 
 interface PlaceDetailsResponse {
   status?: string
@@ -155,12 +175,12 @@ export async function POST(req: NextRequest) {
 
   const rawUrl = body.value.url
   const rawName = body.value.name
-  if (typeof rawUrl !== 'string' || rawUrl.length > MAX_URL_LENGTH) {
-    return errorResponse('invalid_url', 400)
-  }
+  if (typeof rawUrl !== 'string') return errorResponse('invalid_url', 400)
   if (typeof rawName !== 'string') return errorResponse('invalid_name', 400)
 
-  const url = rawUrl.trim()
+  // 길이 제한을 넘는 URL 은 400 이 아니라 '쓸 수 없는 URL' 로 본다.
+  // 400 을 내면 그 행은 이름 검색까지 가 보지도 못하고 영영 못 살리는 행이 된다.
+  const url = rawUrl.length > MAX_URL_LENGTH ? '' : rawUrl.trim()
   const name = rawName.trim()
   if (name.length === 0 || name.length > MAX_NAME_LENGTH) {
     return errorResponse('invalid_name', 400)
@@ -170,6 +190,10 @@ export async function POST(req: NextRequest) {
   // 여기서 400 을 내면 http:// 링크나 열이 밀린 CSV 한 줄이 영영 못 살리는 행이 된다
   // (클라이언트는 400 을 '다시 시도해도 소용없음'으로 처리한다).
   const targetUrl = url.length > 0 ? allowedGoogleUrl(url) : null
+
+  // Google 이 '없다'고 확답한 것과 호출 자체가 실패한 것을 구분한다.
+  // 실패를 404 로 내리면 클라이언트가 '좌표 없음' 으로 영구 기록해 재시도 대상에서 빠진다.
+  let callFailed = false
 
   // 1차: URL에서 CID 추출 후 Place Details API로 정확한 장소 조회
   const cidMatch = targetUrl ? url.match(/!1s0x[0-9a-fA-F]+:(0x[0-9a-fA-F]+)/) : null
@@ -181,8 +205,13 @@ export async function POST(req: NextRequest) {
         { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
       )
 
-      if (res.ok) {
+      if (!res.ok) {
+        callFailed = true
+      } else {
         const data = await res.json() as PlaceDetailsResponse
+        if (data.status !== undefined && RETRYABLE_PLACE_STATUSES.has(data.status)) {
+          callFailed = true
+        }
         const location = data.status === 'OK' ? data.result?.geometry?.location : undefined
         const coords = parseLatLng(location)
         if (coords) {
@@ -194,14 +223,19 @@ export async function POST(req: NextRequest) {
           })
         }
       }
-    } catch { /* fallback */ }
+    } catch {
+      // 타임아웃·네트워크 오류·본문 파싱 실패 — 다음 단계로 넘어가되 실패했음은 기억한다
+      callFailed = true
+    }
   }
 
   // 2차: Google Maps URL을 직접 fetch해서 좌표 추출
   if (targetUrl) {
     try {
       const page = await fetchGooglePage(targetUrl)
-      if (page) {
+      if (!page.ok) {
+        if (page.transient) callFailed = true
+      } else {
         // 최종 URL이나 HTML에서 @lat,lng 패턴 추출
         const urlCoords = page.finalUrl.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
         const fromUrl = urlCoords
@@ -220,7 +254,10 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ lat: fromHtml.lat, lng: fromHtml.lng, name, address: '' })
         }
       }
-    } catch { /* fallback */ }
+    } catch {
+      // 타임아웃·네트워크 오류 — 3차로 넘어가되 실패했음은 기억한다
+      callFailed = true
+    }
   }
 
   // 3차: 이름으로 검색 (최후 수단)
@@ -230,8 +267,13 @@ export async function POST(req: NextRequest) {
       { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }
     )
 
-    if (res.ok) {
+    if (!res.ok) {
+      callFailed = true
+    } else {
       const data = await res.json() as FindPlaceResponse
+      if (data.status !== undefined && RETRYABLE_PLACE_STATUSES.has(data.status)) {
+        callFailed = true
+      }
       const place = data.status === 'OK' ? data.candidates?.[0] : undefined
       const coords = parseLatLng(place?.geometry?.location)
       if (place && coords) {
@@ -243,7 +285,13 @@ export async function POST(req: NextRequest) {
         })
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    callFailed = true
+  }
+
+  // 호출이 한 번이라도 실패했다면 '못 찾음' 이 아니다.
+  // 재시도 가능한 503 으로 내려보내 클라이언트가 재시도 목록에 남기게 한다.
+  if (callFailed) return errorResponse('upstream_error', 503)
 
   return NextResponse.json({ error: 'not_found' }, { status: 404 })
 }

@@ -101,7 +101,6 @@
       "locationDenied": "위치 권한이 거부되었습니다. 브라우저 설정에서 위치 접근을 허용해 주세요.",
       "locationUnsupported": "이 브라우저에서는 위치 기능을 사용할 수 없습니다.",
       "deleteDayFailed": "날짜를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      "deleteDayPartialFailed": "장소는 삭제되었지만 날짜를 삭제하지 못했습니다. 다시 시도해 주세요.",
       "addDayFailed": "날짜를 추가하지 못했습니다. 잠시 후 다시 시도해 주세요.",
       "addDayDuplicate": "이미 같은 날짜가 있습니다.",
       "copyLinkFailed": "링크를 복사하지 못했습니다. 아래 주소를 직접 복사해 주세요.",

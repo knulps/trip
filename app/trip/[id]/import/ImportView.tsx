@@ -112,14 +112,25 @@ function parseCSV(text: string): string[][] {
 
 // 헤더가 없는 CSV의 첫 줄을 잃지 않도록, 진짜 헤더일 때만 건너뛴다
 const HEADER_NAME_COLUMN = new Set(['이름', '제목', 'title', 'name'])
+// 이름 칸 말고 다른 칸에서 헤더임을 한 번 더 뒷받침해 주는 단어.
+// 'note' 처럼 메모 값으로도 흔히 쓰는 말은 넣지 않는다 (데이터 행을 헤더로 오인한다).
+const HEADER_OTHER_COLUMNS = new Set([
+  '메모', '설명', '비고', 'memo', 'description',
+  'url', '링크', '주소', 'link', 'address',
+  '태그', '댓글', 'tag', 'tags', 'comment', 'comments',
+])
 function looksLikeHeader(row: string[]): boolean {
   if (row.length === 0) return false
   const url = (row[2] ?? '').trim().toLowerCase()
   if (url === 'url') return true
   // 세 번째 칸에 진짜 링크가 있으면 데이터 행이다.
-  // (이름이 'Name' 인 장소가 헤더로 오인돼 조용히 사라지지 않도록 이름 칸만으로 판단하지 않는다)
   if (url.startsWith('http://') || url.startsWith('https://')) return false
-  return HEADER_NAME_COLUMN.has((row[0] ?? '').trim().toLowerCase())
+  if (!HEADER_NAME_COLUMN.has((row[0] ?? '').trim().toLowerCase())) return false
+  // 이름 칸 하나만 맞는다고 헤더로 단정하지 않는다.
+  // ('Name' 이라는 이름의 장소가 URL 칸이 비었다는 이유로 조용히 사라지지 않도록)
+  // 다른 칸에도 헤더 단어가 있거나, 이름 말고는 아무 값도 없을 때만 헤더로 본다.
+  const rest = row.slice(1).map(cell => (cell ?? '').trim().toLowerCase())
+  return rest.some(cell => HEADER_OTHER_COLUMNS.has(cell)) || rest.every(cell => cell === '')
 }
 
 function hasCoords(place: ParsedPlace): place is ResolvedPlace {
@@ -157,7 +168,14 @@ async function resolveOne(place: ParsedPlace, signal: AbortSignal): Promise<Reso
     }
 
     if (res.status === 401) return { kind: 'auth' }
-    if (res.status === 503) return { kind: 'unavailable' }
+    if (res.status === 503) {
+      // 503 은 두 갈래다.
+      //   no_key         → 서버에 키가 없어 더 보내도 소용없다 (전체 중단)
+      //   upstream_error → Google 호출이 이번에만 실패했다 (이 행만 재시도 대상)
+      // 본문을 못 읽으면 아래 catch 로 떨어져 재시도 가능한 실패로 남는다.
+      const detail = await res.json() as { error?: unknown }
+      return detail.error === 'upstream_error' ? { kind: 'failed' } : { kind: 'unavailable' }
+    }
     // 404(못 찾음), 400(주소/이름이 잘못됨)은 다시 보내도 결과가 같다
     if (res.status === 404 || res.status === 400) return { kind: 'notFound' }
     // 그 외(5xx, 429 등)는 일시 오류로 보고 재시도할 수 있게 남긴다

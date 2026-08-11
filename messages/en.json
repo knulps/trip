@@ -101,7 +101,6 @@
       "locationDenied": "Location permission was denied. Allow location access in your browser settings.",
       "locationUnsupported": "Geolocation is not available in this browser.",
       "deleteDayFailed": "Couldn't delete the day. Please try again.",
-      "deleteDayPartialFailed": "The places were deleted but the day could not be removed. Please try again.",
       "addDayFailed": "Couldn't add the day. Please try again.",
       "addDayDuplicate": "That date already exists.",
       "copyLinkFailed": "Couldn't copy the link. Copy the address below manually.",

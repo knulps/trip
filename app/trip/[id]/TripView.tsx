@@ -99,7 +99,10 @@ export default function TripView({ trip, days: initialDays }: Props) {
   const [actionError, setActionError] = useState<string | null>(null)
 
   const dayRefs = useRef<globalThis.Map<string, HTMLDivElement>>(new globalThis.Map())
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  // 스크롤 컨테이너는 지도 포커스 모드에서 언마운트되고 목록으로 돌아올 때 새로 만들어진다.
+  // ref 로만 들고 있으면 새 노드에 scroll 리스너를 다시 붙일 계기가 없어 scroll-spy 가 멈춘다.
+  // state 로 두면 노드가 바뀔 때마다 아래 effect 가 다시 돌아 리스너를 옮겨 붙인다.
+  const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null)
 
   // scroll-spy 제어 (rAF 스로틀 + 프로그램 스크롤 중 억제)
   const spyRafRef = useRef<number | null>(null)
@@ -375,18 +378,12 @@ export default function TripView({ trip, days: initialDays }: Props) {
     setDeletingDayId(dayId)
     setActionError(null)
     try {
-      // 장소 먼저 삭제 (CASCADE 보장 안됨)
-      const { error: placesError } = await supabase.from('places').delete().eq('day_id', dayId)
-      if (placesError) {
-        setActionError(t('deleteDayFailed'))
-        return
-      }
-
+      // places.day_id 는 days(id) on delete cascade 라 날짜만 지우면 장소도 함께 지워진다.
+      // (cascade 는 테이블 소유자 권한으로 돌아 호출자의 RLS 를 타지 않는다)
+      // 장소를 먼저 지우면 날짜 삭제가 실패했을 때 장소만 영영 사라진 상태로 남는다.
       const { error: dayError } = await supabase.from('days').delete().eq('id', dayId)
       if (dayError) {
-        // 장소만 지워지고 날짜가 남은 상태 — 화면을 실제 상태로 되돌려 놓음
-        setActionError(t('deleteDayPartialFailed'))
-        void refreshDays()
+        setActionError(t('deleteDayFailed'))
         return
       }
 
@@ -424,8 +421,8 @@ export default function TripView({ trip, days: initialDays }: Props) {
   // Scroll to day section when tab is clicked
   function scrollToDay(dayId: string) {
     const el = dayRefs.current.get(dayId)
-    if (el && el.isConnected && scrollContainerRef.current) {
-      const container = scrollContainerRef.current
+    if (el && el.isConnected && scrollContainer) {
+      const container = scrollContainer
       const containerTop = container.getBoundingClientRect().top
       const elTop = el.getBoundingClientRect().top
 
@@ -448,7 +445,7 @@ export default function TripView({ trip, days: initialDays }: Props) {
 
   // Update selectedDayId based on scroll position (rAF 스로틀, 값이 바뀔 때만 setState)
   useEffect(() => {
-    const container = scrollContainerRef.current
+    const container = scrollContainer
     if (!container) return
 
     const liveDayIds = new Set(days.map(d => d.id))
@@ -496,7 +493,7 @@ export default function TripView({ trip, days: initialDays }: Props) {
         spyRafRef.current = null
       }
     }
-  }, [days, releaseSpySoon])
+  }, [days, releaseSpySoon, scrollContainer])
 
   const content = (
     <div className="flex flex-col h-full">
@@ -800,7 +797,7 @@ export default function TripView({ trip, days: initialDays }: Props) {
           )}
         </div>
       ) : (
-        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
+        <div ref={setScrollContainer} className="flex-1 overflow-y-auto">
           <PlaceList
             days={days}
             editMode={editMode}
