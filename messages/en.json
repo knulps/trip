@@ -8,23 +8,31 @@
     "close": "Close",
     "delete": "Delete",
     "loading": "Loading...",
-    "copied": "Copied ✓"
+    "copied": "Copied ✓",
+    "dayLabel": "Day {n}"
   },
   "nav": {
     "backToList": "← List",
     "moreMenu": "More",
     "import": "Import",
-    "copyInviteLink": "Copy invite link"
+    "copyInviteLink": "Copy invite link",
+    "switchLanguage": "Switch language",
+    "back": "Back"
   },
   "home": {
     "title": "Trips",
     "newTrip": "New trip",
     "empty": "No trips yet",
-    "createFirst": "Create your first trip"
+    "createFirst": "Create your first trip",
+    "errorInvalidInvite": "This invite link is invalid or has expired.",
+    "errorInviteFailed": "We couldn't process the invite. Please try again in a moment."
   },
   "auth": {
     "tagline": "Plan trips together with friends",
-    "continueWithGoogle": "Continue with Google"
+    "continueWithGoogle": "Continue with Google",
+    "signingIn": "Signing in...",
+    "errorAuth": "Sign-in failed. Please try again.",
+    "errorSignIn": "Couldn't start sign-in. Please try again in a moment."
   },
   "trip": {
     "new": {
@@ -34,7 +42,14 @@
       "startDate": "Start date",
       "endDate": "End date",
       "submit": "Create trip",
-      "submitting": "Creating..."
+      "submitting": "Creating...",
+      "errorInvalidDate": "That date isn't valid. Please pick it again.",
+      "errorEndBeforeStart": "The end date is before the start date. Please check the dates.",
+      "errorTooLong": "A trip can be at most {max, plural, one {# day} other {# days}} long.",
+      "errorCreate": "We couldn't create the trip. Please try again in a moment.",
+      "errorMember": "We couldn't save your membership. Please try again.",
+      "errorDays": "The trip was created, but its days couldn't be added. Please add days from the trip screen.",
+      "openTrip": "Open trip"
     },
     "addPlace": {
       "title": "Add Place",
@@ -43,7 +58,11 @@
       "memo": "Note (optional)",
       "memoPlaceholder": "Add a note",
       "submit": "Add to itinerary",
-      "submitting": "Saving..."
+      "submitting": "Saving...",
+      "noDaySelected": "No day was selected, so this place can't be saved. Pick a day on the trip screen and try again.",
+      "goBack": "Back to trip",
+      "clearSelection": "Clear selected place",
+      "errorSave": "We couldn't save the place. Please try again in a moment."
     },
     "editPlace": {
       "title": "Edit Place",
@@ -54,7 +73,10 @@
       "memo": "Note",
       "submitMove": "Move + Save",
       "submit": "Save",
-      "submitting": "Saving..."
+      "submitting": "Saving...",
+      "nameRequired": "Please enter a place name.",
+      "saveFailed": "Could not save. Please try again.",
+      "discardConfirm": "You have unsaved changes. Close anyway?"
     },
     "view": {
       "addDate": "+ Day",
@@ -66,47 +88,86 @@
       "directions": "Directions",
       "googleMaps": "Google Maps ↗",
       "checkDistanceFromHere": "📍 Distance from here",
-      "deleteDay": "This will also delete {count} place(s) in this day. Continue?",
+      "calculating": "Calculating...",
+      "deleteDay": "This will also delete {count, plural, one {# place} other {# places}} in this day. Continue?",
       "walking": "Walk",
       "minutes": "min",
       "minutesDot": "min · ",
       "stops": "stops",
-      "locationError": "Unable to get your location."
+      "locationError": "Unable to get your location.",
+      "mapUnavailable": "The map can't be shown. The Google Maps API key is not configured.",
+      "markerLabel": "Place {index}: {name}",
+      "locating": "Locating...",
+      "locationDenied": "Location permission was denied. Allow location access in your browser settings.",
+      "locationUnsupported": "Geolocation is not available in this browser.",
+      "deleteDayFailed": "Couldn't delete the day. Please try again.",
+      "deleteDayPartialFailed": "The places were deleted but the day could not be removed. Please try again.",
+      "addDayFailed": "Couldn't add the day. Please try again.",
+      "addDayDuplicate": "That date already exists.",
+      "copyLinkFailed": "Couldn't copy the link. Copy the address below manually.",
+      "distanceError": "Couldn't load the distance.",
+      "distanceEmpty": "No routes available."
     },
     "placeList": {
       "addPlace": "+ Add place",
       "empty": "No places yet",
       "selectDay": "Select or add a day",
-      "placeCount": "{count} place(s)",
+      "placeCount": "{count, plural, one {# place} other {# places}}",
       "dragHandle": "Drag handle",
       "viewOnMap": "View on map",
       "directions": "Directions",
       "deletePlace": "Delete place",
       "confirmDelete": "Delete this place?",
       "deleteAll": "Delete all",
-      "confirmDeleteAll": "Delete all {count} place(s) in Day {day}?"
+      "confirmDeleteAll": "Delete {count, plural, one {the # place} other {all # places}} in Day {day}?",
+      "deleteFailed": "Could not delete the place. Please try again.",
+      "deleteAllFailed": "Could not delete the places. Please try again.",
+      "reorderFailed": "Could not change the order. Please try again."
     },
     "import": {
       "title": "Import Places",
       "csvSelect": "Select CSV file",
       "selectAll": "Select all",
       "deselectAll": "Deselect all",
-      "resolveCoords": "Resolve {count} coordinates",
+      "resolveCoords": "Resolve {count, plural, one {# coordinate} other {# coordinates}}",
       "resolving": "Resolving... ({current}/{total})",
-      "addItems": "Add {count} place(s)",
+      "addItems": "Add {count, plural, one {# place} other {# places}}",
       "adding": "Adding...",
       "finish": "Done — back to trip",
       "selectionStatus": "{selected} of {total} selected",
-      "addedCount": "{count} added",
+      "addedCount": "{count, plural, one {# place added} other {# places added}}",
       "addedToDay": "✓ Added to {day}",
       "coordsNotFound": "✗ Coordinates not found",
-      "allDuplicates": "All {count} selected place(s) are already added.",
-      "partialDuplicates": "Skipping {skipped} duplicate(s), adding {count}."
+      "allDuplicates": "{count, plural, one {The selected place is} other {All # selected places are}} already added.",
+      "unknownDay": "Unknown date",
+      "backToTrip": "Back to trip",
+      "noDays": "This trip has no dates yet.",
+      "noDaysHint": "Add a date on the trip screen first.",
+      "fileReadError": "Could not read the file. Please pick it again.",
+      "emptyCsv": "No places to import. Check that each CSV row is name, note, URL.",
+      "selectPlace": "Select {name}",
+      "addingProgress": "Adding... ({current}/{total})",
+      "resolveDone": "Found coordinates for {resolved, plural, one {# place} other {# places}}.",
+      "resolveDoneWithMissing": "Found coordinates for {resolved, plural, one {# place} other {# places}}. {notFound, plural, one {# place has} other {# places have}} no coordinates.",
+      "resolveDoneWithFailures": "Found coordinates for {resolved, plural, one {# place} other {# places}}. {failed, plural, one {# lookup} other {# lookups}} failed and can be retried.",
+      "resolveCancelled": "Coordinate lookup cancelled. The remaining places can be looked up again.",
+      "resolveFailedRow": "✗ Lookup failed (can retry)",
+      "resolveUnavailable": "Coordinate lookup is unavailable right now. Please try again later.",
+      "retryFailed": "Retry {count, plural, one {# failure} other {# failures}}",
+      "sessionExpired": "Your session has expired. Please sign in again.",
+      "duplicateCheckFailed": "Could not check for duplicates, so nothing was added. Please try again later.",
+      "duplicateInDay": "Already on this date",
+      "duplicateInFile": "Duplicated inside the file",
+      "skippedDuplicates": "Skipped {count, plural, one {# duplicate} other {# duplicates}}.",
+      "addFailedRow": "✗ Could not be added",
+      "addSuccess": "Added {count, plural, one {# place} other {# places}} to {day}.",
+      "addPartialFailure": "Added {added, plural, one {# place} other {# places}}, {failed} could not be added.",
+      "addAllFailed": "Could not add the places. Please try again later."
     }
   },
-  "days": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
   "metadata": {
     "title": "Trip Planner",
+    "shortName": "Trips",
     "description": "Plan trips together with friends"
   }
 }

@@ -1,5 +1,12 @@
 -- Trip 앱 DB 스키마
 -- Supabase SQL Editor에서 실행
+--
+-- 이 파일은 몇 번을 다시 실행해도 안전하다 (re-runnable).
+--   * 테이블/인덱스: create ... if not exists
+--   * 컬럼: alter table ... add column if not exists
+--   * 정책·함수: drop policy if exists 후 create policy / create or replace function
+--   * Realtime publication: 이미 등록된 테이블은 건너뛴다
+-- 새 DB 프로비저닝과 기존 DB 마이그레이션 양쪽에 같은 파일을 쓴다.
 
 -- 1. trips
 create table if not exists public.trips (
@@ -42,7 +49,62 @@ create table if not exists public.places (
   created_at timestamptz not null default now()
 );
 
+-- 4-1. places 추가 컬럼
+-- 앱은 방문 시간과 메모를 읽고 쓴다 (types/supabase.ts 의 visit_time / memo).
+-- visit_time 은 'HH:MM' 문자열로 저장되고 화면에서는 앞 5글자만 잘라 쓴다 → time 타입.
+alter table public.places add column if not exists visit_time time;
+alter table public.places add column if not exists memo       text;
+
 create index if not exists places_day_id_order_key on public.places (day_id, order_key);
+
+-- =============================
+-- RLS 헬퍼 함수
+-- =============================
+--
+-- trip_members 에 대한 정책 안에서 trip_members 를 다시 조회하면
+-- 그 하위 조회에도 같은 정책이 또 적용되어 Postgres 가
+-- "infinite recursion detected in policy for relation" (42P17) 에러를 낸다.
+-- security definer 함수는 함수 소유자 권한으로 실행되어 호출자의 RLS 를 타지 않으므로
+-- 재귀 없이 멤버십을 확인할 수 있다.
+-- search_path 를 고정해 search_path 조작을 통한 우회를 막는다.
+
+create or replace function public.is_trip_member(p_trip_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.trip_members tm
+    where tm.trip_id = p_trip_id
+      and tm.user_id = auth.uid()
+  );
+$$;
+
+-- 여행 생성자 확인.
+-- trips 를 직접 조회하면 trips_select(멤버만 조회) 때문에
+-- 아직 멤버 행이 없는 '여행 생성 직후' 시점에 false 가 나온다. 그래서 여기도 security definer.
+create or replace function public.is_trip_creator(p_trip_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.trips t
+    where t.id = p_trip_id
+      and t.created_by = auth.uid()
+  );
+$$;
+
+revoke execute on function public.is_trip_member(uuid) from public;
+revoke execute on function public.is_trip_creator(uuid) from public;
+grant execute on function public.is_trip_member(uuid) to authenticated;
+grant execute on function public.is_trip_creator(uuid) to authenticated;
 
 -- =============================
 -- Row Level Security (RLS)
@@ -53,37 +115,61 @@ alter table public.trip_members enable row level security;
 alter table public.days enable row level security;
 alter table public.places enable row level security;
 
--- trips: 멤버만 조회, owner만 수정
+-- trips: 멤버만 조회, 생성자만 수정/삭제
+drop policy if exists "trips_select" on public.trips;
 create policy "trips_select" on public.trips
-  for select using (
-    id in (select trip_id from public.trip_members where user_id = auth.uid())
-  );
+  for select using (public.is_trip_member(id));
 
+drop policy if exists "trips_insert" on public.trips;
 create policy "trips_insert" on public.trips
   for insert with check (created_by = auth.uid());
 
+drop policy if exists "trips_update" on public.trips;
 create policy "trips_update" on public.trips
-  for update using (created_by = auth.uid());
+  for update using (created_by = auth.uid())
+  with check (created_by = auth.uid());
 
--- trip_members: 내 멤버십만 조회 (INSERT는 서버 측 service role만)
+-- 여행 생성 도중 멤버 등록이 실패했을 때 앱이 방금 만든 여행을 되돌릴 수 있어야 한다
+drop policy if exists "trips_delete" on public.trips;
+create policy "trips_delete" on public.trips
+  for delete using (created_by = auth.uid());
+
+-- trip_members: 내가 속한 여행의 멤버만 조회
+drop policy if exists "trip_members_select" on public.trip_members;
 create policy "trip_members_select" on public.trip_members
-  for select using (
-    trip_id in (select trip_id from public.trip_members where user_id = auth.uid())
+  for select using (public.is_trip_member(trip_id));
+
+-- trip_members: 본인이 만든 여행에 '본인' 멤버십만 넣을 수 있다.
+--   user_id = auth.uid()      → 남을 임의로 끼워 넣지 못한다
+--   is_trip_creator(trip_id)  → 남의 여행에 마음대로 참여하지 못한다
+-- 초대 링크를 통한 참여는 service role 로 도는 /invite/[token] 라우트가 처리하므로
+-- 이 정책을 더 열어 줄 필요가 없다.
+drop policy if exists "trip_members_insert" on public.trip_members;
+create policy "trip_members_insert" on public.trip_members
+  for insert with check (
+    user_id = auth.uid()
+    and public.is_trip_creator(trip_id)
   );
 
 -- days: 멤버만 CRUD
+drop policy if exists "days_all" on public.days;
 create policy "days_all" on public.days
-  for all using (
-    trip_id in (select trip_id from public.trip_members where user_id = auth.uid())
-  );
+  for all using (public.is_trip_member(trip_id))
+  with check (public.is_trip_member(trip_id));
 
 -- places: 멤버만 CRUD
+drop policy if exists "places_all" on public.places;
 create policy "places_all" on public.places
   for all using (
-    day_id in (
-      select d.id from public.days d
-      join public.trip_members tm on tm.trip_id = d.trip_id
-      where tm.user_id = auth.uid()
+    exists (
+      select 1 from public.days d
+      where d.id = day_id and public.is_trip_member(d.trip_id)
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.days d
+      where d.id = day_id and public.is_trip_member(d.trip_id)
     )
   );
 
@@ -91,6 +177,24 @@ create policy "places_all" on public.places
 -- Realtime
 -- =============================
 
--- days, places 테이블 Realtime 활성화
-alter publication supabase_realtime add table public.days;
-alter publication supabase_realtime add table public.places;
+-- days, places 테이블 Realtime 활성화 (이미 등록돼 있으면 건너뛴다)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'days'
+  ) then
+    alter publication supabase_realtime add table public.days;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'places'
+  ) then
+    alter publication supabase_realtime add table public.places;
+  end if;
+end $$;
