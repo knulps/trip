@@ -135,13 +135,22 @@ async function fetchGooglePage(start: URL): Promise<GooglePageResult> {
 }
 
 // Google Places API 가 HTTP 200 으로 내려보내는 실패 상태.
-// '그런 장소가 없다'(ZERO_RESULTS)가 아니라 '이번 호출이 되지 않았다'는 뜻이라
-// 못 찾음(404)이 아니라 재시도 대상으로 다뤄야 한다.
-// REQUEST_DENIED 는 키에 Places API 가 안 켜져 있을 때도 나오는데,
-// 그걸 못 찾음으로 기록하면 CSV 전체가 '좌표 없음'으로 굳어 되살릴 방법이 없어진다.
-const RETRYABLE_PLACE_STATUSES = new Set([
-  'OVER_QUERY_LIMIT',
+// '그런 장소가 없다'(ZERO_RESULTS·NOT_FOUND·INVALID_REQUEST)가 아니라
+// '이번 호출이 되지 않았다'는 뜻이라 못 찾음(404)이 아니라 따로 다뤄야 한다.
+// 아래 두 목록 어디에도 없는 상태는 '없다'는 확답으로 보고 404 로 내려간다.
+
+// 설정·할당량 문제 — 사용자가 손을 대기 전에는 몇 번을 다시 보내도 같은 답이 온다.
+// REQUEST_DENIED 는 키에 (레거시) Places API 가 안 켜졌거나 키 제한에 막혔을 때,
+// OVER_QUERY_LIMIT 은 일일 할당량이 바닥났을 때 나온다.
+// 이걸 재시도 대상으로 두면 모든 행이 '실패' 로 쌓이고,
+// 사용자는 눌러도 절대 성공하지 않는 '다시 시도' 버튼만 받게 된다.
+const CONFIG_PLACE_STATUSES = new Set([
   'REQUEST_DENIED',
+  'OVER_QUERY_LIMIT',
+])
+
+// 이번 호출만 어긋난 상태 — 다시 보내면 될 수 있다.
+const RETRYABLE_PLACE_STATUSES = new Set([
   'UNKNOWN_ERROR',
 ])
 
@@ -194,6 +203,8 @@ export async function POST(req: NextRequest) {
   // Google 이 '없다'고 확답한 것과 호출 자체가 실패한 것을 구분한다.
   // 실패를 404 로 내리면 클라이언트가 '좌표 없음' 으로 영구 기록해 재시도 대상에서 빠진다.
   let callFailed = false
+  // 키 설정이나 할당량 때문에 거부된 경우. 재시도가 아니라 안내가 필요하다.
+  let configDenied = false
 
   // 1차: URL에서 CID 추출 후 Place Details API로 정확한 장소 조회
   const cidMatch = targetUrl ? url.match(/!1s0x[0-9a-fA-F]+:(0x[0-9a-fA-F]+)/) : null
@@ -209,7 +220,9 @@ export async function POST(req: NextRequest) {
         callFailed = true
       } else {
         const data = await res.json() as PlaceDetailsResponse
-        if (data.status !== undefined && RETRYABLE_PLACE_STATUSES.has(data.status)) {
+        if (data.status !== undefined && CONFIG_PLACE_STATUSES.has(data.status)) {
+          configDenied = true
+        } else if (data.status !== undefined && RETRYABLE_PLACE_STATUSES.has(data.status)) {
           callFailed = true
         }
         const location = data.status === 'OK' ? data.result?.geometry?.location : undefined
@@ -271,7 +284,9 @@ export async function POST(req: NextRequest) {
       callFailed = true
     } else {
       const data = await res.json() as FindPlaceResponse
-      if (data.status !== undefined && RETRYABLE_PLACE_STATUSES.has(data.status)) {
+      if (data.status !== undefined && CONFIG_PLACE_STATUSES.has(data.status)) {
+        configDenied = true
+      } else if (data.status !== undefined && RETRYABLE_PLACE_STATUSES.has(data.status)) {
         callFailed = true
       }
       const place = data.status === 'OK' ? data.candidates?.[0] : undefined
@@ -288,6 +303,10 @@ export async function POST(req: NextRequest) {
   } catch {
     callFailed = true
   }
+
+  // 키 설정·할당량 문제는 재시도로 풀리지 않는다.
+  // 행마다 '실패' 로 쌓지 않고 별도 코드로 알려 클라이언트가 작업을 멈추고 원인을 안내하게 한다.
+  if (configDenied) return errorResponse('places_api_denied', 503)
 
   // 호출이 한 번이라도 실패했다면 '못 찾음' 이 아니다.
   // 재시도 가능한 503 으로 내려보내 클라이언트가 재시도 목록에 남기게 한다.

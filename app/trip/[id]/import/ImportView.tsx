@@ -47,7 +47,8 @@ type ResolveOutcome =
   | { kind: 'failed' }        // 네트워크/서버 일시 오류 (재시도 가능)
   | { kind: 'aborted' }       // 사용자가 취소했거나 화면을 떠난 경우
   | { kind: 'auth' }          // 401 - 로그인 세션 만료
-  | { kind: 'unavailable' }   // 503 - 서버에서 검색 기능을 쓸 수 없음
+  | { kind: 'unavailable' }   // 503 - 서버에 지도 키가 없어 검색 기능 자체를 쓸 수 없음
+  | { kind: 'denied' }        // 503 - 키에 Places API 가 없거나 할당량이 바닥남 (재시도 무의미)
 
 let rowIdSeq = 0
 function nextRowId(): string {
@@ -169,12 +170,15 @@ async function resolveOne(place: ParsedPlace, signal: AbortSignal): Promise<Reso
 
     if (res.status === 401) return { kind: 'auth' }
     if (res.status === 503) {
-      // 503 은 두 갈래다.
-      //   no_key         → 서버에 키가 없어 더 보내도 소용없다 (전체 중단)
-      //   upstream_error → Google 호출이 이번에만 실패했다 (이 행만 재시도 대상)
+      // 503 은 세 갈래다.
+      //   upstream_error    → Google 호출이 이번에만 실패했다 (이 행만 재시도 대상)
+      //   places_api_denied → 키에 Places API 가 없거나 할당량이 바닥났다 (전체 중단 + 원인 안내)
+      //   no_key            → 서버에 키가 없어 더 보내도 소용없다 (전체 중단)
       // 본문을 못 읽으면 아래 catch 로 떨어져 재시도 가능한 실패로 남는다.
       const detail = await res.json() as { error?: unknown }
-      return detail.error === 'upstream_error' ? { kind: 'failed' } : { kind: 'unavailable' }
+      if (detail.error === 'upstream_error') return { kind: 'failed' }
+      if (detail.error === 'places_api_denied') return { kind: 'denied' }
+      return { kind: 'unavailable' }
     }
     // 404(못 찾음), 400(주소/이름이 잘못됨)은 다시 보내도 결과가 같다
     if (res.status === 404 || res.status === 400) return { kind: 'notFound' }
@@ -292,10 +296,11 @@ export default function ImportView({ tripId, days }: { tripId: string; days: Day
     let failedCount = 0
     let authFailed = false
     let unavailable = false
+    let denied = false
 
     async function worker(): Promise<void> {
       for (;;) {
-        if (controller.signal.aborted || authFailed || unavailable) return
+        if (controller.signal.aborted || authFailed || unavailable || denied) return
         const place = queue.shift()
         if (!place) return
 
@@ -304,6 +309,8 @@ export default function ImportView({ tripId, days }: { tripId: string; days: Day
         if (outcome.kind === 'aborted') return
         if (outcome.kind === 'auth') { authFailed = true; return }
         if (outcome.kind === 'unavailable') { unavailable = true; return }
+        // 키 설정·할당량 문제라 남은 행을 더 보내봐야 같은 답이다. 여기서 멈춘다
+        if (outcome.kind === 'denied') { denied = true; return }
 
         // 오래 걸리는 작업이라 그 사이 목록이 바뀌었을 수 있다. 항상 최신 상태 위에 반영한다
         if (outcome.kind === 'ok') {
@@ -346,6 +353,8 @@ export default function ImportView({ tripId, days }: { tripId: string; days: Day
       setBanner({ tone: 'error', text: t('sessionExpired') })
     } else if (unavailable) {
       setBanner({ tone: 'error', text: t('resolveUnavailable') })
+    } else if (denied) {
+      setBanner({ tone: 'error', text: t('resolveDenied') })
     } else if (controller.signal.aborted) {
       setBanner({ tone: 'info', text: t('resolveCancelled') })
     } else if (failedCount > 0) {

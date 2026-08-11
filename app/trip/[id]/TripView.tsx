@@ -122,6 +122,15 @@ export default function TripView({ trip, days: initialDays }: Props) {
     ? allPlaces.find(p => p.id === focusedPlaceId) ?? null
     : null
 
+  // 포커스한 장소가 목록에서 사라지면 포커스도 함께 푼다.
+  // MapController 는 '보고 있는 장소가 있으면' 날짜 변경 pan 을 건너뛰는데,
+  // 그 장소가 이미 지워졌으면 장소 pan 도 대상을 못 찾아 지도가 지워진 자리에 멈춘다.
+  // 삭제 경로(내가 지운 날짜, 다른 사용자가 Realtime 으로 지운 장소)마다 챙기지 않고
+  // '가리키는 장소가 실제로 없으면 푼다' 는 조건 하나로 모두 덮는다.
+  useEffect(() => {
+    if (focusedPlaceId !== null && focusedPlace === null) setFocusedPlaceId(null)
+  }, [focusedPlaceId, focusedPlace])
+
   // Polyline 좌표 — useMemo로 불필요한 재계산 방지
   const polylinePath = useMemo(
     () => places.map(p => ({ lat: p.lat, lng: p.lng })),
@@ -387,12 +396,17 @@ export default function TripView({ trip, days: initialDays }: Props) {
         return
       }
 
-      // 삭제에 성공했을 때만 인접 날짜로 포커스 이동
-      const currentIndex = days.findIndex(d => d.id === dayId)
-      const nextDays = days.filter(d => d.id !== dayId)
-      if (nextDays.length > 0) {
-        const newIndex = Math.max(0, currentIndex - 1)
-        setSelectedDayId(nextDays[newIndex]?.id ?? nextDays[0].id)
+      // 삭제에 성공했고, 지운 날짜가 지금 보고 있던 날짜일 때만 인접 날짜로 포커스 이동.
+      // 다른 날짜를 지웠는데도 선택을 옮기면 보고 있던 날짜에서 튕겨 나가 지도까지 따라 움직인다.
+      // (선택한 날짜가 사라지는 경우는 selectedDay 의 days[0] 대체로도 덮이지만,
+      //  그러면 항상 첫 날로 가므로 여기서 인접 날짜로 옮겨 준다)
+      if (dayId === selectedDayId) {
+        const currentIndex = days.findIndex(d => d.id === dayId)
+        const nextDays = days.filter(d => d.id !== dayId)
+        if (nextDays.length > 0) {
+          const newIndex = Math.max(0, currentIndex - 1)
+          setSelectedDayId(nextDays[newIndex]?.id ?? nextDays[0].id)
+        }
       }
 
       void refreshDays()
