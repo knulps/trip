@@ -116,6 +116,9 @@ function looksLikeHeader(row: string[]): boolean {
   if (row.length === 0) return false
   const url = (row[2] ?? '').trim().toLowerCase()
   if (url === 'url') return true
+  // 세 번째 칸에 진짜 링크가 있으면 데이터 행이다.
+  // (이름이 'Name' 인 장소가 헤더로 오인돼 조용히 사라지지 않도록 이름 칸만으로 판단하지 않는다)
+  if (url.startsWith('http://') || url.startsWith('https://')) return false
   return HEADER_NAME_COLUMN.has((row[0] ?? '').trim().toLowerCase())
 }
 
@@ -498,7 +501,9 @@ export default function ImportView({ tripId, days }: { tripId: string; days: Day
   const busy = resolving || importing
   const selectableCount = parsedPlaces.filter(p => !p.added).length
   const selectedCount = parsedPlaces.filter(p => p.selected && !p.added).length
-  const needsResolve = parsedPlaces.some(p => p.selected && needsCoords(p))
+  // 버튼에 적는 수는 실제로 검색을 보낼 행 수와 같아야 한다 (resolveSelected 와 같은 조건)
+  const resolvableCount = parsedPlaces.filter(p => p.selected && needsCoords(p)).length
+  const needsResolve = resolvableCount > 0
   const importableCount = parsedPlaces.filter(p => p.selected && !p.added && hasCoords(p)).length
   const failedCount = parsedPlaces.filter(p => !p.added && p.status === 'failed').length
   const allSelected = parsedPlaces.filter(p => !p.added).every(p => p.selected)
@@ -623,7 +628,7 @@ export default function ImportView({ tripId, days }: { tripId: string; days: Day
                   >
                     {resolving
                       ? t('resolving', { current: progress.current, total: progress.total })
-                      : t('resolveCoords', { count: selectedCount })}
+                      : t('resolveCoords', { count: resolvableCount })}
                   </button>
                 )}
                 {resolving && (

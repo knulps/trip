@@ -68,8 +68,8 @@ export default function NewTripPage() {
     }
 
     // owner로 trip_members에 추가
-    // 실패하면 trips_select RLS(멤버만 조회) 때문에 본인에게도 보이지 않는 여행이 남는다.
-    // 그래서 방금 만든 여행을 되돌린 뒤 에러를 알린다.
+    // 실패하면 멤버가 하나도 없는 여행이 남는다. days/places 의 RLS 는 멤버 여부로 판정하므로
+    // 만든 본인조차 날짜와 장소를 넣을 수 없다. 그래서 방금 만든 여행을 되돌린 뒤 에러를 알린다.
     const { error: memberError } = await supabase.from('trip_members').insert({
       trip_id: trip.id,
       user_id: user.id,

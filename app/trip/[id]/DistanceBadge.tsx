@@ -73,7 +73,9 @@ function acquire(cacheKey: string, from: Place, to: Place): PendingRequest {
         return null
       })
       .finally(() => {
-        pending.delete(cacheKey)
+        // 언마운트→재마운트 사이에 새 요청이 같은 키로 등록됐을 수 있다.
+        // 키만 보고 지우면 남의(더 새로운) 요청을 지워 abort 도 dedup 도 못 하게 된다.
+        if (pending.get(cacheKey) === request) pending.delete(cacheKey)
       }),
   }
 

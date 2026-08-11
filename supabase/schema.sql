@@ -84,8 +84,8 @@ as $$
 $$;
 
 -- 여행 생성자 확인.
--- trips 를 직접 조회하면 trips_select(멤버만 조회) 때문에
--- 아직 멤버 행이 없는 '여행 생성 직후' 시점에 false 가 나온다. 그래서 여기도 security definer.
+-- 다른 테이블(trip_members)의 정책 안에서 trips 를 조회하므로,
+-- trips 의 정책이 어떻게 바뀌든 판정이 흔들리지 않도록 여기도 security definer 로 둔다.
 create or replace function public.is_trip_creator(p_trip_id uuid)
 returns boolean
 language sql
@@ -115,10 +115,22 @@ alter table public.trip_members enable row level security;
 alter table public.days enable row level security;
 alter table public.places enable row level security;
 
--- trips: 멤버만 조회, 생성자만 수정/삭제
+-- trips: 멤버와 생성자가 조회, 생성자만 수정/삭제
+--
+-- 생성자를 조회 대상에 넣어야 하는 이유:
+-- 앱은 여행을 .insert(...).select('id') 로 만들고, PostgREST 는 이걸
+-- INSERT ... RETURNING 으로 보낸다. Postgres 는 RETURNING 으로 돌려줄 행이
+-- 그 테이블의 select 정책을 반드시 통과해야 하고, 통과하지 못하면
+-- 행을 조용히 빼는 게 아니라 에러(42501)를 낸다.
+-- 이 시점에는 trip_members 행이 아직 없으므로(다음 문에서 넣는다)
+-- 멤버 조건만 두면 여행 생성 자체가 실패한다.
+-- created_by 는 trips_insert 가 이미 auth.uid() 로 강제하는 값이라
+-- 이 조건으로 넓어지는 범위는 '본인이 만든 행' 뿐이고,
+-- trips_update / trips_delete 의 조건과도 같다.
+-- (컬럼 직접 비교라 trips 를 다시 조회하지 않으므로 재귀도 생기지 않는다)
 drop policy if exists "trips_select" on public.trips;
 create policy "trips_select" on public.trips
-  for select using (public.is_trip_member(id));
+  for select using (created_by = auth.uid() or public.is_trip_member(id));
 
 drop policy if exists "trips_insert" on public.trips;
 create policy "trips_insert" on public.trips

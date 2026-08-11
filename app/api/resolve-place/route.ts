@@ -16,8 +16,47 @@ const ALLOWED_HOSTS = new Set([
   'maps.app.goo.gl',
   'g.co',
 ])
-// google.co.kr, maps.google.co.jp 같은 국가별 도메인
-const GOOGLE_COUNTRY_HOST = /^(www\.|maps\.)?google\.[a-z.]{2,6}$/
+// google.co.kr, maps.google.co.jp 같은 국가별 도메인.
+// 정규식으로 뒷부분을 뭉뚱그리면(예: google\.[a-z.]{2,6}) 점까지 함께 매칭되어
+// google.xyz.io 처럼 공격자가 가진 도메인의 하위 도메인도 통과한다.
+// 그래서 실제 존재하는 국가 도메인만 목록으로 고정하고 완전 일치로만 비교한다.
+const GOOGLE_TLDS = [
+  'ad', 'ae', 'al', 'am', 'as', 'at', 'az', 'ba', 'be', 'bf', 'bg', 'bi', 'bj', 'bs', 'bt',
+  'by', 'ca', 'cat', 'cd', 'cf', 'cg', 'ch', 'ci', 'cl', 'cm', 'cn', 'cv', 'cz', 'de', 'dj',
+  'dk', 'dm', 'dz', 'ee', 'es', 'fi', 'fm', 'fr', 'ga', 'ge', 'gg', 'gl', 'gm', 'gr', 'gy',
+  'hn', 'hr', 'ht', 'hu', 'ie', 'im', 'iq', 'is', 'it', 'je', 'jo', 'kg', 'ki', 'kz', 'la',
+  'li', 'lk', 'lt', 'lu', 'lv', 'md', 'me', 'mg', 'mk', 'ml', 'mn', 'mu', 'mv', 'mw', 'ne',
+  'nl', 'no', 'nr', 'nu', 'pl', 'pn', 'ps', 'pt', 'ro', 'rs', 'ru', 'rw', 'sc', 'se', 'sh',
+  'si', 'sk', 'sm', 'sn', 'so', 'sr', 'st', 'td', 'tg', 'tl', 'tm', 'tn', 'to', 'tt', 'vu',
+  'ws',
+]
+const GOOGLE_CO_TLDS = [
+  'ao', 'bw', 'ck', 'cr', 'id', 'il', 'in', 'jp', 'ke', 'kr', 'ls', 'ma', 'mz', 'nz', 'th',
+  'tz', 'ug', 'uk', 'uz', 've', 'vi', 'za', 'zm', 'zw',
+]
+const GOOGLE_COM_TLDS = [
+  'af', 'ag', 'ar', 'au', 'bd', 'bh', 'bn', 'bo', 'br', 'bz', 'co', 'cu', 'cy', 'do', 'ec',
+  'eg', 'et', 'fj', 'gh', 'gi', 'gt', 'hk', 'jm', 'kh', 'kw', 'lb', 'ly', 'mm', 'mt', 'mx',
+  'my', 'na', 'ng', 'ni', 'np', 'om', 'pa', 'pe', 'pg', 'ph', 'pk', 'pr', 'py', 'qa', 'sa',
+  'sb', 'sg', 'sl', 'sv', 'tj', 'tr', 'tw', 'ua', 'uy', 'vc', 'vn',
+]
+const GOOGLE_COUNTRY_HOSTS = new Set<string>([
+  ...GOOGLE_TLDS.map(tld => `google.${tld}`),
+  ...GOOGLE_CO_TLDS.map(tld => `google.co.${tld}`),
+  ...GOOGLE_COM_TLDS.map(tld => `google.com.${tld}`),
+])
+
+/** hostname 이 허용 목록(고정 목록 또는 Google 국가 도메인)에 완전히 일치하는지 확인한다. */
+function isAllowedHost(host: string): boolean {
+  if (ALLOWED_HOSTS.has(host)) return true
+  // www. / maps. 접두사 하나만 떼어 보고, 나머지가 국가 도메인 목록과 정확히 같아야 한다
+  const bare = host.startsWith('www.')
+    ? host.slice(4)
+    : host.startsWith('maps.')
+      ? host.slice(5)
+      : host
+  return GOOGLE_COUNTRY_HOSTS.has(bare)
+}
 
 /**
  * 허용된 Google 호스트의 https URL 인지 확인한다.
@@ -32,8 +71,7 @@ function allowedGoogleUrl(raw: string, base?: URL): URL | null {
     return null
   }
   if (parsed.protocol !== 'https:') return null
-  const host = parsed.hostname.toLowerCase()
-  if (ALLOWED_HOSTS.has(host) || GOOGLE_COUNTRY_HOST.test(host)) return parsed
+  if (isAllowedHost(parsed.hostname.toLowerCase())) return parsed
   return null
 }
 
@@ -128,12 +166,13 @@ export async function POST(req: NextRequest) {
     return errorResponse('invalid_name', 400)
   }
 
-  // URL 이 비어 있으면 이름 검색만 한다. 값이 있는데 Google 호스트가 아니면 거부.
+  // URL 이 비어 있거나 허용 목록 밖이면 '없는 것'으로 보고 이름 검색(3차)까지 내려간다.
+  // 여기서 400 을 내면 http:// 링크나 열이 밀린 CSV 한 줄이 영영 못 살리는 행이 된다
+  // (클라이언트는 400 을 '다시 시도해도 소용없음'으로 처리한다).
   const targetUrl = url.length > 0 ? allowedGoogleUrl(url) : null
-  if (url.length > 0 && !targetUrl) return errorResponse('invalid_url', 400)
 
   // 1차: URL에서 CID 추출 후 Place Details API로 정확한 장소 조회
-  const cidMatch = url.match(/!1s0x[0-9a-fA-F]+:(0x[0-9a-fA-F]+)/)
+  const cidMatch = targetUrl ? url.match(/!1s0x[0-9a-fA-F]+:(0x[0-9a-fA-F]+)/) : null
   if (cidMatch) {
     try {
       const cidDecimal = BigInt(cidMatch[1]).toString()
