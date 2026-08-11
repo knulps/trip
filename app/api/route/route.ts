@@ -1,4 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { errorResponse, parseLatLng, readJsonObject, requireUser } from '@/lib/api-auth'
+
+const FETCH_TIMEOUT_MS = 8000
+
+const MODES = ['TRANSIT', 'DRIVE', 'WALK'] as const
+type TravelMode = (typeof MODES)[number]
+
+function parseMode(input: unknown): TravelMode | null {
+  return MODES.includes(input as TravelMode) ? (input as TravelMode) : null
+}
 
 interface RouteSegment {
   type: 'WALK' | 'TRANSIT'
@@ -48,14 +58,21 @@ interface GoogleRoute {
 }
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.GOOGLE_MAPS_SERVER_KEY
-  if (!apiKey) return NextResponse.json({ error: 'no_key' }, { status: 503 })
+  const auth = await requireUser()
+  if (!auth.ok) return auth.response
 
-  const { origin, destination, mode } = await req.json() as {
-    origin: { lat: number; lng: number }
-    destination: { lat: number; lng: number }
-    mode: 'TRANSIT' | 'DRIVE' | 'WALK'
-  }
+  const apiKey = process.env.GOOGLE_MAPS_SERVER_KEY
+  if (!apiKey) return errorResponse('no_key', 503)
+
+  const body = await readJsonObject(req)
+  if (!body.ok) return body.response
+
+  const origin = parseLatLng(body.value.origin)
+  const destination = parseLatLng(body.value.destination)
+  if (!origin || !destination) return errorResponse('invalid_coordinates', 400)
+
+  const mode = parseMode(body.value.mode)
+  if (!mode) return errorResponse('invalid_mode', 400)
 
   const fieldMask = mode === 'TRANSIT'
     ? 'routes.polyline.encodedPolyline,routes.duration,routes.distanceMeters,routes.legs.steps.transitDetails,routes.legs.steps.polyline,routes.legs.steps.travelMode,routes.legs.steps.startLocation,routes.legs.steps.endLocation'
@@ -78,7 +95,11 @@ export async function POST(req: NextRequest) {
           departureTime: new Date().toISOString(),
         }),
       }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
+
+    // 4xx/5xx 는 파싱하지 않고 not_found 로 떨어뜨린다
+    if (!res.ok) return NextResponse.json({ error: 'not_found' }, { status: 404 })
 
     const data = await res.json() as { routes?: GoogleRoute[] }
     const route = data.routes?.[0]

@@ -2,15 +2,53 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import type { Trip } from '@/types/supabase'
-import { getTranslations } from 'next-intl/server'
+import { getTranslations, getFormatter } from 'next-intl/server'
 import LocaleSwitcher from '@/components/LocaleSwitcher'
+import { formatFullDate } from '@/lib/format'
 
-export default async function HomePage() {
+// 초대 라우트가 실패 시 붙여 보내는 error 쿼리 값
+const INVITE_ERROR_KEYS = {
+  invalid_invite: 'errorInvalidInvite',
+  invite_failed: 'errorInviteFailed',
+} as const
+
+type InviteErrorCode = keyof typeof INVITE_ERROR_KEYS
+
+function toInviteErrorCode(value: string | string[] | undefined): InviteErrorCode | null {
+  const code = Array.isArray(value) ? value[0] : value
+  if (code && code in INVITE_ERROR_KEYS) return code as InviteErrorCode
+  return null
+}
+
+// Supabase 조인 결과는 관계 정의에 따라 객체/배열/null 로 올 수 있어 런타임에서 좁힌다
+function isTrip(value: unknown): value is Trip {
+  if (typeof value !== 'object' || value === null) return false
+  const row = value as Record<string, unknown>
+  return (
+    typeof row.id === 'string' &&
+    typeof row.name === 'string' &&
+    typeof row.start_date === 'string' &&
+    typeof row.end_date === 'string' &&
+    typeof row.created_at === 'string'
+  )
+}
+
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
   const t = await getTranslations('home')
+  const tCommon = await getTranslations('common')
+  // 서버 컴포넌트에서는 훅 대신 getFormatter() 로 같은 포맷터를 얻는다
+  const format = await getFormatter()
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) redirect('/login')
+
+  // Next 16 에서 searchParams 는 Promise 라 await 이 필요하다
+  const inviteError = toInviteErrorCode((await searchParams).error)
 
   // 내가 멤버인 여행 목록 (trip_members → trips JOIN)
   const { data: memberships } = await supabase
@@ -18,9 +56,13 @@ export default async function HomePage() {
     .select('trips(*)')
     .eq('user_id', user.id)
 
-  const trips = memberships
-    ?.flatMap(m => (m.trips ? [m.trips as Trip] : []))
-    .sort((a, b) => b.created_at.localeCompare(a.created_at)) ?? []
+  const trips = (memberships ?? [])
+    .flatMap(m => {
+      const joined: unknown = m.trips
+      if (Array.isArray(joined)) return joined.filter(isTrip)
+      return isTrip(joined) ? [joined] : []
+    })
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
 
   return (
     <main className="flex flex-col h-full">
@@ -37,6 +79,22 @@ export default async function HomePage() {
           </Link>
         </div>
       </header>
+
+      {/* 초대 실패 안내 — 닫기는 error 쿼리를 뗀 '/' 로 이동해서 처리한다 */}
+      {inviteError && (
+        <div className="px-5 pb-3">
+          <div role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3">
+            <p className="flex-1 text-xs text-red-600">{t(INVITE_ERROR_KEYS[inviteError])}</p>
+            <Link
+              href="/"
+              aria-label={tCommon('close')}
+              className="shrink-0 text-red-400 text-sm leading-none"
+            >
+              ✕
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-5 pb-8">
         {trips.length === 0 ? (
@@ -59,7 +117,7 @@ export default async function HomePage() {
                 >
                   <span className="font-medium">{trip.name}</span>
                   <span className="text-xs text-gray-400">
-                    {trip.start_date} – {trip.end_date}
+                    {formatFullDate(format, trip.start_date)} – {formatFullDate(format, trip.end_date)}
                   </span>
                 </Link>
               </li>

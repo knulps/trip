@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useTranslations } from 'next-intl'
+import { useFormatter, useTranslations } from 'next-intl'
 import type { Place, Day } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
+import { formatDayDate } from '@/lib/format'
 import Link from 'next/link'
 import { generateKeyBetween } from 'fractional-indexing'
 import {
@@ -38,6 +39,10 @@ interface Props {
 }
 
 /* ── PlaceItem: non-edit mode ── */
+// `children` 은 이 장소와 다음 장소 사이의 구분자(DistanceBadge)다.
+// <ol> 의 직계 자식은 <li> 만 허용되므로 badge 를 앞 장소의 <li> 안에 넣는다.
+// (badge 는 실제 버튼을 담고 있어 aria-hidden 으로 감추면 안 되고,
+//  독립 <li> 로 두면 목록 항목 수가 장소 수와 어긋난다.)
 function PlaceItem({
   place,
   index,
@@ -45,6 +50,7 @@ function PlaceItem({
   onFocus,
   isRouteOrigin,
   isRouteDest,
+  children,
 }: {
   place: Place
   index: number
@@ -52,43 +58,47 @@ function PlaceItem({
   onFocus?: (place: Place) => void
   isRouteOrigin?: boolean
   isRouteDest?: boolean
+  children?: React.ReactNode
 }) {
   const t = useTranslations('trip.placeList')
 
   return (
-    <li className={`flex items-center gap-3 py-3 transition-all ${
-      isRouteOrigin ? 'border-l-4 border-green-500 pl-2 -ml-2' :
-      isRouteDest ? 'border-l-4 border-red-500 pl-2 -ml-2' : ''
-    }`}>
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white">
-        {index + 1}
-      </span>
-      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(place)}>
-        <p className="text-sm font-medium truncate">{place.name}</p>
-        <p className="text-xs text-gray-400 truncate">
-          {place.visit_time && <span className="mr-1">{place.visit_time.slice(0, 5)}</span>}
-          {place.address}
-        </p>
-        {place.memo && (
-          <p className="text-xs text-gray-400 truncate">{place.memo}</p>
-        )}
+    <li>
+      <div className={`flex items-center gap-3 py-3 transition-all ${
+        isRouteOrigin ? 'border-l-4 border-green-500 pl-2 -ml-2' :
+        isRouteDest ? 'border-l-4 border-red-500 pl-2 -ml-2' : ''
+      }`}>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-900 text-[10px] font-bold text-white">
+          {index + 1}
+        </span>
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onEdit(place)}>
+          <p className="text-sm font-medium truncate">{place.name}</p>
+          <p className="text-xs text-gray-400 truncate">
+            {place.visit_time && <span className="mr-1">{place.visit_time.slice(0, 5)}</span>}
+            {place.address}
+          </p>
+          {place.memo && (
+            <p className="text-xs text-gray-400 truncate">{place.memo}</p>
+          )}
+        </div>
+        <button
+          onClick={() => onFocus?.(place)}
+          className="shrink-0 text-gray-300 transition-colors hover:text-blue-400 active:text-blue-600"
+          aria-label={t('viewOnMap')}
+        >
+          📍
+        </button>
+        <a
+          href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(place.name + ' ' + place.address)}&travelmode=transit`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 text-gray-300 transition-colors hover:text-green-400 active:text-green-600"
+          aria-label={t('directions')}
+        >
+          ↗
+        </a>
       </div>
-      <button
-        onClick={() => onFocus?.(place)}
-        className="shrink-0 text-gray-300 transition-colors hover:text-blue-400 active:text-blue-600"
-        aria-label={t('viewOnMap')}
-      >
-        📍
-      </button>
-      <a
-        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(place.name + ' ' + place.address)}&travelmode=transit`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="shrink-0 text-gray-300 transition-colors hover:text-green-400 active:text-green-600"
-        aria-label={t('directions')}
-      >
-        ↗
-      </a>
+      {children}
     </li>
   )
 }
@@ -170,7 +180,11 @@ function DraggableDayPlaces({
 
   const deletePlace = useCallback(async (id: string) => {
     if (!window.confirm(t('confirmDelete'))) return
-    await supabase.from('places').delete().eq('id', id)
+    const { error } = await supabase.from('places').delete().eq('id', id)
+    if (error) {
+      window.alert(t('deleteFailed'))
+      return
+    }
     onRefresh()
   }, [supabase, onRefresh, t])
 
@@ -178,23 +192,31 @@ function DraggableDayPlaces({
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const oldIndex = localPlaces.findIndex(p => p.id === active.id)
-    const newIndex = localPlaces.findIndex(p => p.id === over.id)
+    const previous = localPlaces
+    const oldIndex = previous.findIndex(p => p.id === active.id)
+    const newIndex = previous.findIndex(p => p.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
 
-    const reordered = arrayMove(localPlaces, oldIndex, newIndex)
+    const reordered = arrayMove(previous, oldIndex, newIndex)
     setLocalPlaces(reordered)
 
-    const newKey = generateKeyBetween(
-      oldIndex > newIndex
-        ? (newIndex > 0 ? localPlaces[newIndex - 1].order_key : null)
-        : localPlaces[newIndex].order_key,
-      oldIndex > newIndex
-        ? localPlaces[newIndex].order_key
-        : (newIndex < localPlaces.length - 1 ? localPlaces[newIndex + 1]?.order_key ?? null : null)
-    )
+    // 새 order_key 의 경계 = 이동이 끝난 배열에서 옮겨진 항목의 앞/뒤 이웃.
+    const before = reordered[newIndex - 1]?.order_key ?? null
+    const after = reordered[newIndex + 1]?.order_key ?? null
 
-    await supabase.from('places').update({ order_key: newKey }).eq('id', active.id as string)
-    onRefresh()
+    try {
+      // 두 경계가 같거나 순서가 뒤집혀 있으면 generateKeyBetween 이 throw 한다.
+      const newKey = generateKeyBetween(before, after)
+      const { error } = await supabase
+        .from('places')
+        .update({ order_key: newKey })
+        .eq('id', active.id as string)
+      if (error) throw error
+      onRefresh()
+    } catch {
+      setLocalPlaces(previous) // 낙관적 순서 되돌리기
+      window.alert(t('reorderFailed'))
+    }
   }
 
   return (
@@ -213,9 +235,20 @@ function DraggableDayPlaces({
 /* ── Main PlaceList ── */
 export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onSelectRoute, dayRefs, activeRoutePlaceIds }: Props) {
   const t = useTranslations('trip.placeList')
-  const tRoot = useTranslations()
-  const days_arr = tRoot.raw('days') as string[]
+  const tCommon = useTranslations('common')
+  const format = useFormatter()
   const [editingPlace, setEditingPlace] = useState<Place | null>(null)
+  const supabase = createClient()
+
+  const deleteAllPlaces = useCallback(async (dayId: string, dayNumber: number, count: number) => {
+    if (!window.confirm(t('confirmDeleteAll', { day: dayNumber, count }))) return
+    const { error } = await supabase.from('places').delete().eq('day_id', dayId)
+    if (error) {
+      window.alert(t('deleteAllFailed'))
+      return
+    }
+    onRefresh()
+  }, [supabase, onRefresh, t])
 
   if (days.length === 0) {
     return (
@@ -229,23 +262,28 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
     <>
       <div className="flex flex-col">
         {days.map((day, dayIndex) => {
-          const date = new Date(day.date + 'T00:00:00')
-          const dayOfWeek = days_arr[date.getDay()]
-          const dateLabel = `${date.getMonth() + 1}/${date.getDate()} ${dayOfWeek}`
+          const dateLabel = formatDayDate(format, day.date)
 
           return (
             <div
               key={day.id}
               data-day-id={day.id}
               ref={(el) => {
-                if (el) dayRefs.current.set(day.id, el)
+                if (!el) return
+                // React 19 의 ref cleanup — Day 가 삭제되면 Map 에서도 지워야
+                // TripView 의 scroll-spy 가 detach 된 엘리먼트를 계속 보지 않는다.
+                const refs = dayRefs.current
+                refs.set(day.id, el)
+                return () => {
+                  refs.delete(day.id)
+                }
               }}
             >
               {/* Day Header */}
               <div className="sticky top-0 z-10 bg-white/90 backdrop-blur-sm px-4 py-2 border-b border-gray-100">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-gray-900">
-                    Day {dayIndex + 1}{' '}
+                    {tCommon('dayLabel', { n: dayIndex + 1 })}{' '}
                     <span className="text-xs font-normal text-gray-400">{dateLabel}</span>
                     <span className="ml-1.5 text-xs font-normal text-gray-400">
                       · {t('placeCount', { count: day.places.length })}
@@ -253,12 +291,7 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
                   </span>
                   {editMode && day.places.length > 0 && (
                     <button
-                      onClick={async () => {
-                        if (!window.confirm(t('confirmDeleteAll', { day: dayIndex + 1, count: day.places.length }))) return
-                        const supabase = createClient()
-                        await supabase.from('places').delete().eq('day_id', day.id)
-                        onRefresh()
-                      }}
+                      onClick={() => deleteAllPlaces(day.id, dayIndex + 1, day.places.length)}
                       className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white active:bg-red-700"
                     >
                       {t('deleteAll')}
@@ -285,19 +318,19 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
               ) : (
                 <ol className="flex flex-col px-4">
                   {day.places.map((place, i) => (
-                    <div key={place.id}>
-                      <PlaceItem
-                        place={place}
-                        index={i}
-                        onEdit={setEditingPlace}
-                        onFocus={onFocusPlace}
-                        isRouteOrigin={activeRoutePlaceIds?.from === place.id}
-                        isRouteDest={activeRoutePlaceIds?.to === place.id}
-                      />
+                    <PlaceItem
+                      key={place.id}
+                      place={place}
+                      index={i}
+                      onEdit={setEditingPlace}
+                      onFocus={onFocusPlace}
+                      isRouteOrigin={activeRoutePlaceIds?.from === place.id}
+                      isRouteDest={activeRoutePlaceIds?.to === place.id}
+                    >
                       {i < day.places.length - 1 && (
                         <DistanceBadge from={place} to={day.places[i + 1]} onSelectRoute={onSelectRoute} />
                       )}
-                    </div>
+                    </PlaceItem>
                   ))}
                 </ol>
               )}
