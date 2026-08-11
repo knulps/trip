@@ -152,7 +152,7 @@
       "resolveCancelled": "Coordinate lookup cancelled. The remaining places can be looked up again.",
       "resolveFailedRow": "✗ Lookup failed (can retry)",
       "resolveUnavailable": "Coordinate lookup is unavailable right now. Please try again later.",
-      "resolveDenied": "Google denied the coordinate lookup. Check that the Places API is enabled for the server Maps key, that the key restrictions do not block it, and that the daily quota is not used up. Retrying will give the same result until the configuration is fixed.",
+      "resolveDenied": "Google denied the coordinate lookup. Check that the Places API is enabled for the server Maps key and that the key restrictions do not block it. Retrying will give the same result until the configuration is fixed.",
       "retryFailed": "Retry {count, plural, one {# failure} other {# failures}}",
       "sessionExpired": "Your session has expired. Please sign in again.",
       "duplicateCheckFailed": "Could not check for duplicates, so nothing was added. Please try again later.",

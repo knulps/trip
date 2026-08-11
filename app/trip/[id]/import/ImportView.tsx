@@ -172,7 +172,7 @@ async function resolveOne(place: ParsedPlace, signal: AbortSignal): Promise<Reso
     if (res.status === 503) {
       // 503 은 세 갈래다.
       //   upstream_error    → Google 호출이 이번에만 실패했다 (이 행만 재시도 대상)
-      //   places_api_denied → 키에 Places API 가 없거나 할당량이 바닥났다 (전체 중단 + 원인 안내)
+      //   places_api_denied → 키에 Places API 가 안 켜졌거나 키 제한에 막혔다 (전체 중단 + 원인 안내)
       //   no_key            → 서버에 키가 없어 더 보내도 소용없다 (전체 중단)
       // 본문을 못 읽으면 아래 catch 로 떨어져 재시도 가능한 실패로 남는다.
       const detail = await res.json() as { error?: unknown }

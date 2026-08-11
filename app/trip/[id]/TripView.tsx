@@ -131,6 +131,17 @@ export default function TripView({ trip, days: initialDays }: Props) {
     if (focusedPlaceId !== null && focusedPlace === null) setFocusedPlaceId(null)
   }, [focusedPlaceId, focusedPlace])
 
+  // 선택한 날짜도 같은 방식으로 실제 목록과 맞춘다.
+  // 다른 사용자가 지운 날짜를 가리킨 채로 두면 화면은 selectedDay 의 대체값(days[0])을 보여 주는데
+  // 탭 하이라이트는 어디에도 안 붙고, deleteDay 의 'dayId === selectedDayId' 판정도 빗나가
+  // 눈에 보이는 그 날짜를 지워도 인접 날짜로 옮겨 가지 않는다.
+  // scroll-spy 는 days 에 있는 id 만 쓰므로 이 effect 와 서로 밀어내지 않는다.
+  useEffect(() => {
+    if (selectedDayId !== null && !days.some(d => d.id === selectedDayId)) {
+      setSelectedDayId(selectedDay?.id ?? null)
+    }
+  }, [days, selectedDayId, selectedDay])
+
   // Polyline 좌표 — useMemo로 불필요한 재계산 방지
   const polylinePath = useMemo(
     () => places.map(p => ({ lat: p.lat, lng: p.lng })),
@@ -394,6 +405,15 @@ export default function TripView({ trip, days: initialDays }: Props) {
       if (dayError) {
         setActionError(t('deleteDayFailed'))
         return
+      }
+
+      // 지운 날짜에 있던 장소를 보고 있었다면 포커스도 같은 커밋에서 함께 푼다.
+      // 아래 invariant effect 에 맡기면 refreshDays 가 끝난 뒤라 한 커밋 늦는다.
+      // 그 사이 MapController 의 날짜 pan effect(deps: selectedDayId)가 '보는 장소가 있다'며
+      // 그냥 지나가 버리고, 뒤늦게 포커스가 풀려도 그 effect 의 deps 는 그대로라 다시 돌지 않는다.
+      // 결국 지도가 지워진 장소에 멈춘 채 남는다.
+      if (focusedPlaceId !== null && day.places.some(p => p.id === focusedPlaceId)) {
+        setFocusedPlaceId(null)
       }
 
       // 삭제에 성공했고, 지운 날짜가 지금 보고 있던 날짜일 때만 인접 날짜로 포커스 이동.
@@ -1050,6 +1070,9 @@ function MapController({
   const map = useMap()
 
   // 포커스 중인 장소를 최신 값으로 들고 있기 (날짜 변경 effect가 focus 변경으로 재실행되지 않도록)
+  // 이 effect 는 아래 날짜 pan effect 보다 반드시 먼저 선언돼 있어야 한다.
+  // 한 커밋에서 포커스 해제와 날짜 변경이 함께 일어날 때(날짜 삭제) 같은 순서로 실행되므로,
+  // 여기서 ref 가 먼저 비워져야 날짜 pan effect 가 '보는 장소 없음' 으로 보고 pan 을 한다.
   const focusedPlaceIdRef = useRef(focusedPlaceId)
   useEffect(() => {
     focusedPlaceIdRef.current = focusedPlaceId

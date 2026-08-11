@@ -152,7 +152,7 @@
       "resolveCancelled": "좌표 검색을 취소했습니다. 남은 장소는 다시 검색할 수 있습니다.",
       "resolveFailedRow": "✗ 검색에 실패했습니다 (다시 시도 가능)",
       "resolveUnavailable": "좌표 검색 기능을 지금 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.",
-      "resolveDenied": "Google 이 좌표 검색을 거부했습니다. 서버 지도 키에 Places API 가 켜져 있는지, 키 제한이 이 API 를 막고 있지 않은지, 일일 사용량이 남아 있는지 확인해 주세요. 설정을 고치기 전에는 다시 시도해도 같은 결과가 나옵니다.",
+      "resolveDenied": "Google 이 좌표 검색을 거부했습니다. 서버 지도 키에 Places API 가 켜져 있는지, 키 제한이 이 API 를 막고 있지 않은지 확인해 주세요. 설정을 고치기 전에는 다시 시도해도 같은 결과가 나옵니다.",
       "retryFailed": "실패한 {count}개 다시 시도",
       "sessionExpired": "로그인 세션이 만료되었습니다. 다시 로그인해 주세요.",
       "duplicateCheckFailed": "중복 확인에 실패해 추가를 중단했습니다. 잠시 후 다시 시도해 주세요.",
