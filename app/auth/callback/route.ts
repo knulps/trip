@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
+import { INVITE_TOKEN_COOKIE } from '@/lib/invite'
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -23,10 +24,10 @@ export async function GET(request: NextRequest) {
   }
 
   // 초대 토큰 처리: 쿠키에 저장된 invite_token이 있으면 초대 수락 라우트로
-  const inviteToken = request.cookies.get('invite_token')?.value
+  const inviteToken = request.cookies.get(INVITE_TOKEN_COOKIE)?.value
   if (inviteToken) {
     const response = NextResponse.redirect(`${origin}/invite/${inviteToken}`)
-    response.cookies.delete({ name: 'invite_token', path: '/' })
+    response.cookies.delete({ name: INVITE_TOKEN_COOKIE, path: '/' })
     return response
   }
 

@@ -53,7 +53,15 @@ export async function proxy(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = `/invite/${inviteParam}`
       url.search = ''
-      return NextResponse.redirect(url)
+      const redirectResponse = NextResponse.redirect(url)
+      // 위 getUser() 가 refresh 토큰을 회전시켰다면 갱신된 세션 쿠키가
+      // supabaseResponse 에만 실려 있다. 새로 만든 redirect 응답을 그대로 반환하면
+      // 그 Set-Cookie 가 통째로 사라지고, 브라우저에는 이미 폐기된 옛 토큰만 남아
+      // 이어지는 /invite 요청에서 조용히 로그아웃된다. 그래서 옮겨 붙인다.
+      supabaseResponse.cookies.getAll().forEach(cookie =>
+        redirectResponse.cookies.set(cookie)
+      )
+      return redirectResponse
     }
 
     // supabaseResponse 는 위 setAll 콜백에서 새로 만들어졌을 수 있으므로
