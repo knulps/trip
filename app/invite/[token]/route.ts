@@ -9,6 +9,15 @@ import {
 // Postgres unique_violation — 두 탭에서 동시에 수락한 경우
 const UNIQUE_VIOLATION = '23505'
 
+// 초대 처리가 끝나는 모든 지점에서 쓰는 리다이렉트 — 초대 쿠키를 같이 지운다.
+// 여기서 지우지 않으면 실패했거나 중도에 그만둔 초대의 쿠키가 수명이 다할 때까지 남고,
+// 그 사이에 다른 로그인을 하면 auth/callback 이 그 쿠키를 집어 엉뚱한 여행에 합류시킨다.
+function redirectClearingInvite(url: string) {
+  const response = NextResponse.redirect(url)
+  response.cookies.delete({ name: INVITE_TOKEN_COOKIE, path: '/' })
+  return response
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
@@ -17,7 +26,7 @@ export async function GET(
   const origin = new URL(request.url).origin
 
   if (!isInviteToken(token)) {
-    return NextResponse.redirect(`${origin}/?error=invalid_invite`)
+    return redirectClearingInvite(`${origin}/?error=invalid_invite`)
   }
 
   const supabase = await createClient()
@@ -49,7 +58,7 @@ export async function GET(
     .maybeSingle()
 
   if (!trip) {
-    return NextResponse.redirect(`${origin}/?error=invalid_invite`)
+    return redirectClearingInvite(`${origin}/?error=invalid_invite`)
   }
 
   // 이미 멤버인지 확인
@@ -71,9 +80,9 @@ export async function GET(
 
     // 중복 키는 이미 멤버가 된 것이므로 성공으로 처리
     if (insertError && insertError.code !== UNIQUE_VIOLATION) {
-      return NextResponse.redirect(`${origin}/?error=invite_failed`)
+      return redirectClearingInvite(`${origin}/?error=invite_failed`)
     }
   }
 
-  return NextResponse.redirect(`${origin}/trip/${trip.id}`)
+  return redirectClearingInvite(`${origin}/trip/${trip.id}`)
 }

@@ -61,6 +61,11 @@ export async function proxy(request: NextRequest) {
       supabaseResponse.cookies.getAll().forEach(cookie =>
         redirectResponse.cookies.set(cookie)
       )
+      // 이미 로그인한 사용자를 보내는 길이라 초대 쿠키는 쓸 데가 없다 —
+      // URL 의 토큰만으로 수락이 끝난다. 반대로 예전에 그만둔 다른 초대의 쿠키가
+      // 남아 있으면 다음 로그인에서 그 여행에도 자동으로 합류하게 되므로 여기서 지운다.
+      // 세션 쿠키 이관에 덮이지 않도록 이관 뒤에 지운다.
+      redirectResponse.cookies.delete({ name: INVITE_TOKEN_COOKIE, path: '/' })
       return redirectResponse
     }
 
