@@ -1,10 +1,11 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useTranslations } from 'next-intl'
 import LocaleSwitcher from '@/components/LocaleSwitcher'
+import { PENDING_INVITE_KEY, isInviteToken } from '@/lib/invite'
 
 function GoogleIcon() {
   return (
@@ -35,6 +36,21 @@ function SignInSection() {
       ? t('errorAuth')
       : null
 
+  // proxy 가 이미 같은 토큰을 httpOnly 쿠키로 심어 두지만, 쿠키가 유실되는 경우를
+  // 대비한 2차 안전장치로 localStorage 에도 백업해 둔다.
+  const inviteParam = searchParams.get('invite')
+  const inviteToken = isInviteToken(inviteParam) ? inviteParam : null
+
+  useEffect(() => {
+    if (!inviteToken) return
+    // 사파리 프라이빗 모드나 스토리지 차단 환경에서는 접근 자체가 throw 한다
+    try {
+      localStorage.setItem(PENDING_INVITE_KEY, inviteToken)
+    } catch {
+      // 저장하지 못해도 쿠키 경로가 살아 있으므로 로그인 자체는 막지 않는다
+    }
+  }, [inviteToken])
+
   async function signInWithGoogle() {
     setSignInFailed(false)
     setPending(true)
@@ -59,6 +75,9 @@ function SignInSection() {
         <p role="alert" className="text-center text-sm text-red-600">
           {message}
         </p>
+      )}
+      {inviteToken && (
+        <p className="text-center text-sm text-gray-500">{t('inviteNotice')}</p>
       )}
       <button
         onClick={signInWithGoogle}

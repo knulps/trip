@@ -4,6 +4,7 @@ import Link from 'next/link'
 import type { Trip } from '@/types/supabase'
 import { getTranslations, getFormatter } from 'next-intl/server'
 import LocaleSwitcher from '@/components/LocaleSwitcher'
+import PendingInviteRedirect from '@/components/PendingInviteRedirect'
 import { formatFullDate } from '@/lib/format'
 
 // 초대 라우트가 실패 시 붙여 보내는 error 쿼리 값
@@ -99,7 +100,17 @@ export default async function HomePage({
       <div className="flex-1 overflow-y-auto px-5 pb-8">
         {trips.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
+            {/*
+              여행이 하나도 없을 때만 대기 중인 초대를 마저 처리한다.
+              여행이 있으면 렌더하지 않으므로, 초대가 이미 성공한 사용자가 나중에
+              홈에 들어와도 엉뚱한 곳으로 튕기지 않는다.
+              초대 오류를 표시 중일 때도 제외한다 — 방금 실패한 초대를 다시 시도해
+              같은 오류를 반복하게 만들 이유가 없다.
+            */}
+            {!inviteError && <PendingInviteRedirect />}
             <p className="text-sm text-gray-400">{t('empty')}</p>
+            {/* 토큰이 완전히 유실된 사용자가 스스로 복구할 수 있는 유일한 실마리 */}
+            <p className="text-xs text-gray-400">{t('inviteHint')}</p>
             <Link
               href="/trip/new"
               className="rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-medium text-white"

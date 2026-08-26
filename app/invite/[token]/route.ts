@@ -1,9 +1,10 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-
-// invite_token 컬럼이 uuid 타입이라 형식이 맞지 않으면 Postgres가 에러를 낸다
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+import {
+  INVITE_TOKEN_COOKIE,
+  INVITE_TOKEN_MAX_AGE,
+  isInviteToken,
+} from '@/lib/invite'
 
 // Postgres unique_violation — 두 탭에서 동시에 수락한 경우
 const UNIQUE_VIOLATION = '23505'
@@ -15,19 +16,23 @@ export async function GET(
   const { token } = await params
   const origin = new URL(request.url).origin
 
-  if (!UUID_PATTERN.test(token)) {
+  if (!isInviteToken(token)) {
     return NextResponse.redirect(`${origin}/?error=invalid_invite`)
   }
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // 미인증: 토큰을 쿠키에 저장하고 로그인으로
+  // 미인증: 토큰을 쿠키에 저장하고 로그인으로.
+  // 쿼리에도 토큰을 남기는 이유 — 카카오톡 등 앱 내 브라우저에서 링크를 열면
+  // 구글 OAuth 가 웹뷰를 막아 사용자가 "다른 브라우저로 열기"로 넘어가는데,
+  // 이때 넘어가는 건 URL 뿐이고 쿠키는 앱 내 브라우저에 남는다.
+  // URL 에 토큰이 있으면 바뀐 브라우저에서도 proxy 가 쿠키를 다시 심어 준다.
   if (!user) {
-    const response = NextResponse.redirect(`${origin}/login`)
-    response.cookies.set('invite_token', token, {
+    const response = NextResponse.redirect(`${origin}/login?invite=${token}`)
+    response.cookies.set(INVITE_TOKEN_COOKIE, token, {
       httpOnly: true,
-      maxAge: 60 * 10, // 10분
+      maxAge: INVITE_TOKEN_MAX_AGE,
       sameSite: 'lax',
       path: '/',
       secure: process.env.NODE_ENV === 'production',

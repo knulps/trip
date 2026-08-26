@@ -1,5 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import {
+  INVITE_TOKEN_COOKIE,
+  INVITE_TOKEN_MAX_AGE,
+  isInviteToken,
+} from '@/lib/invite'
 
 // Next.js 16 에서 `middleware` 파일/이름 규칙은 deprecated 되고 `proxy` 로 바뀌었다.
 // proxy 의 런타임은 항상 nodejs 이며 설정으로 바꿀 수 없다 (runtime 을 지정하면 에러).
@@ -35,6 +40,31 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
+  }
+
+  // /login?invite=<uuid> 로 들어온 초대 — 이 처리가 proxy 에 있는 이유는
+  // 페이지 렌더(서버 컴포넌트/클라이언트 컴포넌트) 로는 httpOnly 쿠키를 심을 수 없기 때문이다.
+  // 여기서 쿠키를 다시 심어 두면 앱 내 브라우저에서 외부 브라우저로 링크가 넘어가
+  // 원래 쿠키가 따라오지 못한 경우에도 바뀐 브라우저에 토큰이 새로 남는다.
+  const inviteParam = request.nextUrl.searchParams.get('invite')
+  if (request.nextUrl.pathname === '/login' && isInviteToken(inviteParam)) {
+    // 이미 로그인한 사용자라면 로그인 화면을 다시 볼 이유가 없으니 바로 초대 수락으로 보낸다
+    if (user) {
+      const url = request.nextUrl.clone()
+      url.pathname = `/invite/${inviteParam}`
+      url.search = ''
+      return NextResponse.redirect(url)
+    }
+
+    // supabaseResponse 는 위 setAll 콜백에서 새로 만들어졌을 수 있으므로
+    // 반환 직전인 여기서 쿠키를 심어야 한다.
+    supabaseResponse.cookies.set(INVITE_TOKEN_COOKIE, inviteParam, {
+      httpOnly: true,
+      maxAge: INVITE_TOKEN_MAX_AGE,
+      sameSite: 'lax',
+      path: '/',
+      secure: process.env.NODE_ENV === 'production',
+    })
   }
 
   return supabaseResponse
