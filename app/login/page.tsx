@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useTranslations } from 'next-intl'
 import LocaleSwitcher from '@/components/LocaleSwitcher'
+import { isInviteToken } from '@/lib/invite'
 
 function GoogleIcon() {
   return (
@@ -35,6 +36,11 @@ function SignInSection() {
       ? t('errorAuth')
       : null
 
+  // 토큰을 실제로 실어 나르는 건 proxy 가 심은 httpOnly 쿠키다.
+  // 여기서는 초대 수락을 기다리는 중이라는 안내를 띄우는 용도로만 쓴다.
+  const inviteParam = searchParams.get('invite')
+  const inviteToken = isInviteToken(inviteParam) ? inviteParam : null
+
   async function signInWithGoogle() {
     setSignInFailed(false)
     setPending(true)
@@ -59,6 +65,9 @@ function SignInSection() {
         <p role="alert" className="text-center text-sm text-red-600">
           {message}
         </p>
+      )}
+      {inviteToken && (
+        <p className="text-center text-sm text-gray-500">{t('inviteNotice')}</p>
       )}
       <button
         onClick={signInWithGoogle}

@@ -24,6 +24,7 @@
     "newTrip": "New trip",
     "empty": "No trips yet",
     "createFirst": "Create your first trip",
+    "inviteHint": "Came from an invite link? Open the link again.",
     "errorInvalidInvite": "This invite link is invalid or has expired.",
     "errorInviteFailed": "We couldn't process the invite. Please try again in a moment."
   },
@@ -32,7 +33,8 @@
     "continueWithGoogle": "Continue with Google",
     "signingIn": "Signing in...",
     "errorAuth": "Sign-in failed. Please try again.",
-    "errorSignIn": "Couldn't start sign-in. Please try again in a moment."
+    "errorSignIn": "Couldn't start sign-in. Please try again in a moment.",
+    "inviteNotice": "Sign in to accept the invitation."
   },
   "trip": {
     "new": {

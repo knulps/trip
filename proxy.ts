@@ -1,5 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import {
+  INVITE_TOKEN_COOKIE,
+  INVITE_TOKEN_MAX_AGE,
+  isInviteToken,
+} from '@/lib/invite'
 
 // Next.js 16 에서 `middleware` 파일/이름 규칙은 deprecated 되고 `proxy` 로 바뀌었다.
 // proxy 의 런타임은 항상 nodejs 이며 설정으로 바꿀 수 없다 (runtime 을 지정하면 에러).
@@ -35,6 +40,44 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
+  }
+
+  // /login?invite=<uuid> 로 들어온 초대 — 이 처리가 proxy 에 있는 이유는
+  // 페이지 렌더(서버 컴포넌트/클라이언트 컴포넌트) 로는 httpOnly 쿠키를 심을 수 없기 때문이다.
+  // 여기서 쿠키를 다시 심어 두면 앱 내 브라우저에서 외부 브라우저로 링크가 넘어가
+  // 원래 쿠키가 따라오지 못한 경우에도 바뀐 브라우저에 토큰이 새로 남는다.
+  const inviteParam = request.nextUrl.searchParams.get('invite')
+  if (request.nextUrl.pathname === '/login' && isInviteToken(inviteParam)) {
+    // 이미 로그인한 사용자라면 로그인 화면을 다시 볼 이유가 없으니 바로 초대 수락으로 보낸다
+    if (user) {
+      const url = request.nextUrl.clone()
+      url.pathname = `/invite/${inviteParam}`
+      url.search = ''
+      const redirectResponse = NextResponse.redirect(url)
+      // 위 getUser() 가 refresh 토큰을 회전시켰다면 갱신된 세션 쿠키가
+      // supabaseResponse 에만 실려 있다. 새로 만든 redirect 응답을 그대로 반환하면
+      // 그 Set-Cookie 가 통째로 사라지고, 브라우저에는 이미 폐기된 옛 토큰만 남아
+      // 이어지는 /invite 요청에서 조용히 로그아웃된다. 그래서 옮겨 붙인다.
+      supabaseResponse.cookies.getAll().forEach(cookie =>
+        redirectResponse.cookies.set(cookie)
+      )
+      // 이미 로그인한 사용자를 보내는 길이라 초대 쿠키는 쓸 데가 없다 —
+      // URL 의 토큰만으로 수락이 끝난다. 반대로 예전에 그만둔 다른 초대의 쿠키가
+      // 남아 있으면 다음 로그인에서 그 여행에도 자동으로 합류하게 되므로 여기서 지운다.
+      // 세션 쿠키 이관에 덮이지 않도록 이관 뒤에 지운다.
+      redirectResponse.cookies.delete({ name: INVITE_TOKEN_COOKIE, path: '/' })
+      return redirectResponse
+    }
+
+    // supabaseResponse 는 위 setAll 콜백에서 새로 만들어졌을 수 있으므로
+    // 반환 직전인 여기서 쿠키를 심어야 한다.
+    supabaseResponse.cookies.set(INVITE_TOKEN_COOKIE, inviteParam, {
+      httpOnly: true,
+      maxAge: INVITE_TOKEN_MAX_AGE,
+      sameSite: 'lax',
+      path: '/',
+      secure: process.env.NODE_ENV === 'production',
+    })
   }
 
   return supabaseResponse

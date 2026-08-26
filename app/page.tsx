@@ -100,6 +100,14 @@ export default async function HomePage({
         {trips.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
             <p className="text-sm text-gray-400">{t('empty')}</p>
+            {/*
+              토큰이 완전히 유실된 사용자가 스스로 복구할 수 있는 유일한 실마리다.
+              쿠키가 따라오지 못한 상황을 앱이 알아서 이어 붙이는 방법은 없다 —
+              그런 용도로 두었던 브라우저 저장소 백업은 나중에 로그인한 다른 계정이
+              남의 초대를 대신 수락해 버리는 문제가 있어 걷어냈다. 사용자가 초대
+              링크를 직접 다시 여는 것이 의도가 확인된 유일한 안전한 복구 경로다.
+            */}
+            <p className="text-xs text-gray-400">{t('inviteHint')}</p>
             <Link
               href="/trip/new"
               className="rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-medium text-white"
