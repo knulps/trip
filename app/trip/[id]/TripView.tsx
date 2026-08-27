@@ -174,8 +174,16 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
   // refreshDays 는 호출이 겹칠 수 있는데, 응답이 보낸 순서대로 돌아온다는 보장이 없다.
   // 특히 빈 결과일 때만 아래에서 멤버십 조회를 한 번 더 하므로 빈 응답만 선택적으로 느려진다.
   // (마지막 날짜 삭제 → 곧바로 날짜 추가 하면, 늦게 끝난 빈 응답이 방금 추가한 날짜를 덮어 지운다)
-  // 호출마다 토큰을 올리고 상태를 쓰기 직전에 자기 토큰이 아직 최신인지 확인해 막는다.
+  // 호출마다 순번을 하나씩 받아 두고, 화면에 반영하기 직전에 그 순번이 아직 유효한지 본다.
   const refreshTokenRef = useRef(0)
+  // 판정 기준은 '마지막으로 시작한 순번' 이 아니라 '마지막으로 실제 반영한 순번' 이다.
+  // 시작 순번을 기준으로 삼으면 아무것도 반영하지 못하고 빠져나가는 호출까지
+  // 앞선 호출을 영구히 무효로 만든다. (A 시작(1) → B 시작(2) → B 의 days select 가
+  // 실패해 그냥 반환 → A 가 정상 응답으로 돌아와도 1 !== 2 라 방금 받은 최신 데이터를
+  // 버린다. 다른 멤버가 추가·삭제한 날짜가 화면에 반영되지 않고 낡은 목록이 남는다)
+  // 반영한 순번을 기준으로 하면 B 가 아무것도 못 쓴 경우 A 가 그대로 반영되고,
+  // B 가 이미 썼다면 A 는 여전히 막힌다.
+  const lastAppliedRef = useRef(0)
   // 이 화면을 떠나는 중(나가기 성공) 표시.
   // 나가기가 홈으로 보낸 뒤 뒤늦게 끝난 refreshDays 가 접근 상실로 판정해
   // '/?error=access_lost' 로 그 이동을 덮어쓰면, 스스로 나간 사용자가 오류 배너를 보게 된다.
@@ -199,12 +207,14 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
     // 그래서 빈 배열일 때만 멤버십을 확인해 두 경우를 가른다.
     if (data.length === 0) {
       const membership = await checkTripMembership(supabase, trip.id, userId)
-      // 비동기 경계가 days select 와 이 조회 두 곳이므로, 둘을 모두 지난 뒤에 확인해야 한다
-      if (token !== refreshTokenRef.current) return
       if (membership === 'not-member') {
         // 스스로 나가서 이미 홈으로 가는 중이라면 아무것도 하지 않는다.
         // 그러지 않으면 의도한 나가기 위에 오류 배너가 덧씌워진다.
         if (leavingTripRef.current) return
+        // 홈으로 보내는 것도 '반영' 이라 setDays 와 같은 판정을 거친다.
+        // 늦게 끝난 옛 응답이 뒤늦게 접근 상실로 판정해 최신 화면을 덮는 것을 막는다.
+        if (token <= lastAppliedRef.current) return
+        lastAppliedRef.current = token
         // 이 여행에 더는 접근할 수 없다. 여기서 배너를 띄워 봐야 곧바로 목록으로 이동해
         // 스쳐 지나가므로, 홈이 error 쿼리를 보고 띄우는 배너에 실어 보낸다.
         router.replace('/?error=access_lost')
@@ -214,8 +224,9 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
       if (membership === 'unknown') return
     }
 
-    // 나보다 늦게 출발한 호출이 이미 상태를 썼다면 여기서 조용히 물러난다
-    if (token !== refreshTokenRef.current) return
+    // 나보다 늦게 출발한 호출이 이미 반영을 끝냈다면 여기서 조용히 물러난다
+    if (token <= lastAppliedRef.current) return
+    lastAppliedRef.current = token
 
     setDays(
       data.map(day => ({
@@ -1060,6 +1071,23 @@ function HeaderMenu({
         // 조회가 실패하면 나갔는지 알 수 없으므로 둘 다 실패로 본다 (fail-closed).
         const membership = await checkTripMembership(supabase, tripId, userId)
         if (membership !== 'not-member') {
+          failLeave()
+          return
+        }
+
+        // 'not-member' 를 성공으로 보기 전에 지금 세션의 사용자가 정말 userId 인지 확인한다.
+        // trip_members_select(= is_trip_member(trip_id))는 브라우저 세션의 auth.uid() 로
+        // 평가되는데, userId 는 서버 렌더 시점의 값이라 둘이 어긋날 수 있다
+        // (다른 탭에서 계정을 바꿨거나 로그아웃해 세션이 anon 으로 떨어진 경우).
+        // 그러면 delete 는 RLS 에 막혀 0행·에러 없이 끝나고 뒤이은 조회도 0행이라
+        // 'not-member' 가 나와, 멤버십이 그대로 남은 채 "나갔다"고 판단해 홈으로 보낸다.
+        // 이 코드가 막으려는 조용한 실패와 정확히 같은 모양이다.
+        // 조회가 실패하면 어긋났는지 알 수 없으므로 그것도 실패로 본다 (fail-closed).
+        //
+        // 이 확인은 0행 경로에서만 한다. 다른 호출부는 'not-member' 를 실패로 보므로
+        // 계정이 어긋나도 fail-closed 라 안전하다.
+        const { data: authData, error: authError } = await supabase.auth.getUser()
+        if (authError || authData.user?.id !== userId) {
           failLeave()
           return
         }
