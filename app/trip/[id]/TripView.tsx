@@ -212,7 +212,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
         // 스스로 나가서 이미 홈으로 가는 중이라면 아무것도 하지 않는다.
         // 그러지 않으면 의도한 나가기 위에 오류 배너가 덧씌워진다.
         if (leavingTripRef.current) return
-        // 접근을 잃었다는 사실만 화면 하단 배너로 알리고, 화면은 그대로 둔다.
+        // 접근을 잃었다는 사실만 날짜 탭 아래 배너로 알리고, 화면은 그대로 둔다.
         // 이 경로는 아무것도 '반영' 하지 않으므로 아래 lastAppliedRef 판정을 거치지 않는다.
         // 배너는 멱등이고 되돌릴 수 있어 어느 호출이 띄우든 결과가 같다.
         // 순번을 따져 늦게 출발한 호출에 판정을 넘기면, 그 호출이 중도에 빠져나갔을 때
@@ -1117,7 +1117,7 @@ function HeaderMenu({
 
   function failLeave() {
     setLeaving(false)
-    setOpen(false) // 메뉴는 닫고 안내는 화면 하단에 띄운다
+    setOpen(false) // 메뉴는 닫고 안내는 날짜 탭 아래 배너에 띄운다
     // 메뉴가 사라지면 지금 포커스가 있는 '나가기' 버튼도 함께 언마운트되어
     // 키보드/스크린리더 포커스가 <body> 로 떨어진다. Escape 처리와 같게 트리거로 되돌린다.
     triggerRef.current?.focus()
