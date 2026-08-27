@@ -23,6 +23,7 @@ import {
   formatLocalDate,
   parseLocalDate,
 } from '@/lib/format'
+import { checkTripMembership } from '@/lib/trip-membership'
 
 interface RouteSegment {
   type: 'WALK' | 'TRANSIT'
@@ -70,6 +71,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
   const tCommon = useTranslations('common')
   const tNav = useTranslations('nav')
   const format = useFormatter()
+  const router = useRouter()
 
   const [days, setDays] = useState(initialDays)
   const [selectedDayId, setSelectedDayId] = useState(initialDays[0]?.id ?? null)
@@ -176,17 +178,34 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
       .eq('trip_id', trip.id)
       .order('date', { ascending: true })
 
-    if (data) {
-      setDays(
-        data.map(day => ({
-          ...day,
-          places: (day.places ?? []).sort(
-            (a: Place, b: Place) => (a.order_key < b.order_key ? -1 : 1)
-          ),
-        }))
-      )
+    if (!data) return
+
+    // 빈 배열은 truthy 라 그냥 setDays 하면 화면이 조용히 비워진다.
+    // 여행에서 나간 뒤에는 days_all 정책에 걸려 select 가 전부 걸러져 빈 배열이 오므로,
+    // 앞으로 추가될 mutation 이 같은 함정에 빠져도 여기서 한 번에 걸린다.
+    // 다만 빈 배열을 무조건 실패로 볼 수는 없다 — 하나뿐인 날짜를 지우면 정상적으로 0개가 된다.
+    // 그래서 빈 배열일 때만 멤버십을 확인해 두 경우를 가른다.
+    if (data.length === 0) {
+      const membership = await checkTripMembership(supabase, trip.id, userId)
+      if (membership === 'not-member') {
+        // 이 여행에 더는 접근할 수 없다. 여기서 배너를 띄워 봐야 곧바로 목록으로 이동해
+        // 스쳐 지나가므로, 홈이 error 쿼리를 보고 띄우는 배너에 실어 보낸다.
+        router.replace('/?error=access_lost')
+        return
+      }
+      // 조회가 실패하면 어느 쪽인지 알 수 없으므로 화면을 그대로 둔다 (fail-closed)
+      if (membership === 'unknown') return
     }
-  }, [supabase, trip.id])
+
+    setDays(
+      data.map(day => ({
+        ...day,
+        places: (day.places ?? []).sort(
+          (a: Place, b: Place) => (a.order_key < b.order_key ? -1 : 1)
+        ),
+      }))
+    )
+  }, [supabase, trip.id, userId, router])
 
   // 이벤트가 몰릴 때(드래그 정렬, 일괄 삭제) refetch를 한 번으로 합침
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -409,9 +428,23 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
         .delete()
         .eq('id', dayId)
         .select('id')
-      if (dayError || !deletedDays || deletedDays.length === 0) {
+      if (dayError) {
         setActionError(t('deleteDayFailed'))
         return
+      }
+
+      // 0행에는 두 상황이 섞여 있다.
+      //   (a) 다른 멤버(또는 다른 탭)가 이 날짜를 먼저 지웠다 → 사용자가 원한 상태에 이미 도달했다
+      //   (b) 내가 이 여행에서 나가 days_all 정책에 막혔다 → 실패
+      // 경합 창은 좁지 않다. 위 window.confirm 은 이벤트 루프와 렌더링을 통째로 멈추므로
+      // 대화상자가 떠 있는 동안 도착한 Realtime 이벤트가 화면에 반영되지 않은 채 몇 분도 열려 있다.
+      if (!deletedDays || deletedDays.length === 0) {
+        const membership = await checkTripMembership(supabase, trip.id, userId)
+        if (membership !== 'member') {
+          setActionError(t('deleteDayFailed'))
+          return
+        }
+        // (a) 다. 아래 성공 처리를 그대로 이어 간다.
       }
 
       // 지운 날짜에 있던 장소를 보고 있었다면 포커스도 같은 커밋에서 함께 푼다.
@@ -848,6 +881,8 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
         <div ref={setScrollContainer} className="flex-1 overflow-y-auto">
           <PlaceList
             days={days}
+            tripId={trip.id}
+            userId={userId}
             editMode={editMode}
             onRefresh={refreshDays}
             onFocusPlace={(place) => {
@@ -863,6 +898,8 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
         <EditPlaceModal
           place={editingPlace}
           days={days}
+          tripId={trip.id}
+          userId={userId}
           onClose={() => setEditingPlace(null)}
           onSave={refreshDays}
         />
@@ -958,9 +995,11 @@ function HeaderMenu({
   }
 
   async function leaveTrip() {
-    if (leaving) return // 연타 방지
     if (!window.confirm(t('leaveTripConfirm'))) return
 
+    // 연타 방지 — confirm 이 모달이라 실제로 겹쳐 들어오지는 않지만,
+    // 가드는 막으려는 상태를 세우는 자리에 붙여 두어야 읽을 때 짝이 보인다.
+    if (leaving) return
     setLeaving(true)
     try {
       // .select('user_id') 로 실제 지워진 행을 받아 온다.
@@ -993,15 +1032,10 @@ function HeaderMenu({
       // 잘못 본다. 다만 그런 DB 에서는 trips_select 도 없어 trip/[id]/page.tsx 의 여행
       // 조회부터 비어 notFound 로 끝나므로, 이 버튼이 있는 화면 자체에 닿을 수 없다.
       if (!data || data.length === 0) {
-        const { data: remaining, error: recheckError } = await supabase
-          .from('trip_members')
-          .select('user_id')
-          .eq('trip_id', tripId)
-          .eq('user_id', userId)
-          .maybeSingle()
-
-        // 조회가 실패하면 나갔는지 알 수 없으므로 실패로 본다 (fail-closed)
-        if (recheckError || remaining) {
+        // 'not-member' 만 (a) 다. 아직 멤버면 (b) 이고,
+        // 조회가 실패하면 나갔는지 알 수 없으므로 둘 다 실패로 본다 (fail-closed).
+        const membership = await checkTripMembership(supabase, tripId, userId)
+        if (membership !== 'not-member') {
           failLeave()
           return
         }

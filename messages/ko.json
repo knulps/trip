@@ -27,7 +27,8 @@
     "createFirst": "첫 여행 만들기",
     "inviteHint": "초대 링크로 들어오셨나요? 받은 링크를 다시 열어 주세요.",
     "errorInvalidInvite": "초대 링크가 올바르지 않거나 만료되었습니다.",
-    "errorInviteFailed": "초대를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."
+    "errorInviteFailed": "초대를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    "errorAccessLost": "이 여행에 더 이상 접근할 수 없습니다."
   },
   "auth": {
     "tagline": "지인들과 함께 만드는 여행 일정",
@@ -79,6 +80,7 @@
       "submitting": "저장 중...",
       "nameRequired": "장소 이름을 입력해 주세요.",
       "saveFailed": "저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "placeGone": "이 장소는 이미 삭제되었습니다. 편집 내용을 저장하지 못했습니다.",
       "discardConfirm": "저장하지 않은 변경 사항이 있습니다. 닫을까요?"
     },
     "view": {

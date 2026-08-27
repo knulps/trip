@@ -6,17 +6,18 @@ import { getTranslations, getFormatter } from 'next-intl/server'
 import LocaleSwitcher from '@/components/LocaleSwitcher'
 import { formatFullDate } from '@/lib/format'
 
-// 초대 라우트가 실패 시 붙여 보내는 error 쿼리 값
-const INVITE_ERROR_KEYS = {
+// 홈으로 되돌려 보내는 쪽(초대 라우트, 접근을 잃은 여행 화면)이 붙여 보내는 error 쿼리 값
+const HOME_ERROR_KEYS = {
   invalid_invite: 'errorInvalidInvite',
   invite_failed: 'errorInviteFailed',
+  access_lost: 'errorAccessLost',
 } as const
 
-type InviteErrorCode = keyof typeof INVITE_ERROR_KEYS
+type HomeErrorCode = keyof typeof HOME_ERROR_KEYS
 
-function toInviteErrorCode(value: string | string[] | undefined): InviteErrorCode | null {
+function toHomeErrorCode(value: string | string[] | undefined): HomeErrorCode | null {
   const code = Array.isArray(value) ? value[0] : value
-  if (code && code in INVITE_ERROR_KEYS) return code as InviteErrorCode
+  if (code && code in HOME_ERROR_KEYS) return code as HomeErrorCode
   return null
 }
 
@@ -48,7 +49,7 @@ export default async function HomePage({
   if (!user) redirect('/login')
 
   // Next 16 에서 searchParams 는 Promise 라 await 이 필요하다
-  const inviteError = toInviteErrorCode((await searchParams).error)
+  const homeError = toHomeErrorCode((await searchParams).error)
 
   // 내가 멤버인 여행 목록 (trip_members → trips JOIN)
   const { data: memberships } = await supabase
@@ -80,11 +81,11 @@ export default async function HomePage({
         </div>
       </header>
 
-      {/* 초대 실패 안내 — 닫기는 error 쿼리를 뗀 '/' 로 이동해서 처리한다 */}
-      {inviteError && (
+      {/* 홈으로 되돌아온 이유 안내 — 닫기는 error 쿼리를 뗀 '/' 로 이동해서 처리한다 */}
+      {homeError && (
         <div className="px-5 pb-3">
           <div role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3">
-            <p className="flex-1 text-xs text-red-600">{t(INVITE_ERROR_KEYS[inviteError])}</p>
+            <p className="flex-1 text-xs text-red-600">{t(HOME_ERROR_KEYS[homeError])}</p>
             <Link
               href="/"
               aria-label={tCommon('close')}
