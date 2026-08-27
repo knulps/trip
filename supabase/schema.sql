@@ -163,6 +163,20 @@ create policy "trip_members_insert" on public.trip_members
     and public.is_trip_creator(trip_id)
   );
 
+-- trip_members: 본인 멤버십만 지울 수 있다 (여행 나가기).
+--   user_id = auth.uid()          → 남을 내보내지 못한다
+--   not is_trip_creator(trip_id)  → 여행을 만든 사람은 나가지 못한다
+-- 만든 사람을 막는 이유:
+-- trips_update / trips_delete 는 created_by = auth.uid() 조건이라 만든 사람만 통과한다.
+-- 그 사람이 멤버십을 지우고 나가면 trips_select 의 created_by 조건 때문에 여행은 계속 보이지만,
+-- 남은 멤버 중 누구도 여행 자체를 수정하거나 지울 수 없는 상태로 굳는다.
+drop policy if exists "trip_members_delete" on public.trip_members;
+create policy "trip_members_delete" on public.trip_members
+  for delete using (
+    user_id = auth.uid()
+    and not public.is_trip_creator(trip_id)
+  );
+
 -- days: 멤버만 CRUD
 drop policy if exists "days_all" on public.days;
 create policy "days_all" on public.days

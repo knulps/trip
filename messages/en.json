@@ -17,7 +17,8 @@
     "import": "Import",
     "copyInviteLink": "Copy invite link",
     "switchLanguage": "Switch language",
-    "back": "Back"
+    "back": "Back",
+    "leaveTrip": "Leave trip"
   },
   "home": {
     "title": "Trips",
@@ -78,6 +79,7 @@
       "submitting": "Saving...",
       "nameRequired": "Please enter a place name.",
       "saveFailed": "Could not save. Please try again.",
+      "placeGone": "This place has already been deleted. Your changes were not saved.",
       "discardConfirm": "You have unsaved changes. Close anyway?"
     },
     "view": {
@@ -107,7 +109,10 @@
       "addDayDuplicate": "That date already exists.",
       "copyLinkFailed": "Couldn't copy the link. Copy the address below manually.",
       "distanceError": "Couldn't load the distance.",
-      "distanceEmpty": "No routes available."
+      "distanceEmpty": "No routes available.",
+      "leaveTripConfirm": "You will leave this trip. You'll need an invite link to rejoin. Continue?",
+      "leaveTripFailed": "Couldn't leave the trip. Please try again in a moment.",
+      "accessLost": "You no longer have access to this trip."
     },
     "placeList": {
       "addPlace": "+ Add place",

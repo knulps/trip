@@ -17,7 +17,8 @@
     "import": "가져오기",
     "copyInviteLink": "초대 링크 복사",
     "switchLanguage": "언어 전환",
-    "back": "뒤로"
+    "back": "뒤로",
+    "leaveTrip": "여행 나가기"
   },
   "home": {
     "title": "여행",
@@ -78,6 +79,7 @@
       "submitting": "저장 중...",
       "nameRequired": "장소 이름을 입력해 주세요.",
       "saveFailed": "저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "placeGone": "이 장소는 이미 삭제되었습니다. 편집 내용을 저장하지 못했습니다.",
       "discardConfirm": "저장하지 않은 변경 사항이 있습니다. 닫을까요?"
     },
     "view": {
@@ -107,7 +109,10 @@
       "addDayDuplicate": "이미 같은 날짜가 있습니다.",
       "copyLinkFailed": "링크를 복사하지 못했습니다. 아래 주소를 직접 복사해 주세요.",
       "distanceError": "거리를 불러오지 못했습니다.",
-      "distanceEmpty": "이용할 수 있는 경로가 없습니다."
+      "distanceEmpty": "이용할 수 있는 경로가 없습니다.",
+      "leaveTripConfirm": "이 여행에서 나갑니다. 다시 참여하려면 초대 링크가 필요합니다. 계속할까요?",
+      "leaveTripFailed": "여행에서 나가지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "accessLost": "이 여행에 더 이상 접근할 수 없습니다."
     },
     "placeList": {
       "addPlace": "+ 장소 추가",

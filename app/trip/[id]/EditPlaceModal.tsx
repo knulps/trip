@@ -5,20 +5,26 @@ import { useFormatter, useTranslations } from 'next-intl'
 import type { Place, Day } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import { formatDayDate } from '@/lib/format'
+import { checkTripMembership } from '@/lib/trip-membership'
 import { generateKeyBetween } from 'fractional-indexing'
 
 interface Props {
   place: Place
   days?: Day[]
+  tripId: string
+  userId: string
   onClose: () => void
   onSave: () => void
 }
+
+/* ── 0행 실패 가운데 '대상이 이미 삭제됨' 만 다른 문구를 쓰기 위한 표식 ── */
+const PLACE_GONE = 'place gone'
 
 /* ── 포커스 트랩용 선택자 ── */
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-export default function EditPlaceModal({ place, days, onClose, onSave }: Props) {
+export default function EditPlaceModal({ place, days, tripId, userId, onClose, onSave }: Props) {
   const t = useTranslations('trip.editPlace')
   const tCommon = useTranslations('common')
   const format = useFormatter()
@@ -139,6 +145,20 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
   const supabase = createClient()
   const dayChanged = selectedDayId !== place.day_id
 
+  // update 도 delete 와 똑같이 RLS 에 막히면 0행 + error null 이라, 바뀐 행 수까지 봐야 한다.
+  // 그대로 두면 여행에서 나간 뒤 저장했을 때 에러 한 줄 없이 뒤이은 갱신 조회까지 비어
+  // 날짜와 장소가 전부 사라진 화면만 남는다.
+  // 삭제와 달리 편집은 0행을 성공으로 볼 수 없다 — 대상이 없어지면 입력한 내용이 그대로
+  // 유실되는데 모달만 닫히면 사용자는 저장됐다고 믿는다. 그래서 원인과 관계없이 실패로 두고
+  // 멤버십으로 문구만 가른다.
+  //   (a) 다른 멤버가 이 장소를 먼저 지웠다 → 대상이 이미 없다고 알린다
+  //   (b) 내가 이 여행에서 나가 places_all 정책에 막혔거나 조회가 실패했다 → 기존 실패 문구
+  async function assertPlaceUpdated(updated: { id: string }[] | null) {
+    if (updated && updated.length > 0) return
+    const membership = await checkTripMembership(supabase, tripId, userId)
+    throw new Error(membership === 'member' ? PLACE_GONE : 'trip access lost')
+  }
+
   async function handleSave() {
     if (!trimmedName) {
       setError(t('nameRequired'))
@@ -164,7 +184,7 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
         // lastKey 가 손상됐거나 그 사이 다른 사용자가 더 뒤에 넣었다면 여기서 throw 된다.
         const newKey = generateKeyBetween(lastKey, null)
 
-        const { error: updateError } = await supabase
+        const { data: updated, error: updateError } = await supabase
           .from('places')
           .update({
             name: trimmedName,
@@ -174,19 +194,23 @@ export default function EditPlaceModal({ place, days, onClose, onSave }: Props) 
             order_key: newKey,
           })
           .eq('id', place.id)
+          .select('id')
 
         if (updateError) throw updateError
+        await assertPlaceUpdated(updated)
       } else {
-        const { error: updateError } = await supabase
+        const { data: updated, error: updateError } = await supabase
           .from('places')
           .update({ name: trimmedName, visit_time: visitTime || null, memo: memo || null })
           .eq('id', place.id)
+          .select('id')
 
         if (updateError) throw updateError
+        await assertPlaceUpdated(updated)
       }
-    } catch {
+    } catch (e) {
       // 실패하면 모달을 닫지 않는다 — 사용자가 입력한 내용이 사라지면 안 된다.
-      setError(t('saveFailed'))
+      setError(e instanceof Error && e.message === PLACE_GONE ? t('placeGone') : t('saveFailed'))
       setSaving(false)
       return
     }

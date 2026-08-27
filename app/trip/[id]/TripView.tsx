@@ -23,6 +23,7 @@ import {
   formatLocalDate,
   parseLocalDate,
 } from '@/lib/format'
+import { checkTripMembership } from '@/lib/trip-membership'
 
 interface RouteSegment {
   type: 'WALK' | 'TRANSIT'
@@ -65,8 +66,7 @@ interface Props {
   userId: string
 }
 
-// userId는 page.tsx에서 넘겨주지만 이 화면에서는 아직 쓰지 않으므로 구조 분해하지 않음
-export default function TripView({ trip, days: initialDays }: Props) {
+export default function TripView({ trip, days: initialDays, userId }: Props) {
   const t = useTranslations('trip.view')
   const tCommon = useTranslations('common')
   const tNav = useTranslations('nav')
@@ -170,24 +170,74 @@ export default function TripView({ trip, days: initialDays }: Props) {
   // Supabase Realtime — places / days 변경 실시간 반영
   const supabase = createClient()
 
+  // refreshDays 는 호출이 겹칠 수 있는데, 응답이 보낸 순서대로 돌아온다는 보장이 없다.
+  // 특히 빈 결과일 때만 아래에서 멤버십 조회를 한 번 더 하므로 빈 응답만 선택적으로 느려진다.
+  // (마지막 날짜 삭제 → 곧바로 날짜 추가 하면, 늦게 끝난 빈 응답이 방금 추가한 날짜를 덮어 지운다)
+  // 호출마다 순번을 하나씩 발급해 두고, 화면에 반영하기 직전에 그 순번을 견줘 본다.
+  // 이 ref 는 순번을 나눠 주기만 한다. 반영해도 되는지는 아래 lastAppliedRef 가 가린다.
+  const refreshTokenRef = useRef(0)
+  // 판정 기준은 '마지막으로 시작한 순번' 이 아니라 '마지막으로 실제 반영한 순번' 이다.
+  // 시작 순번을 기준으로 삼으면 아무것도 반영하지 못하고 빠져나가는 호출까지
+  // 앞선 호출을 영구히 무효로 만든다. (A 시작(1) → B 시작(2) → B 의 days select 가
+  // 실패해 그냥 반환 → A 가 정상 응답으로 돌아와도 1 !== 2 라 방금 받은 최신 데이터를
+  // 버린다. 다른 멤버가 추가·삭제한 날짜가 화면에 반영되지 않고 낡은 목록이 남는다)
+  // 반영한 순번을 기준으로 하면 B 가 아무것도 못 쓴 경우 A 가 그대로 반영되고,
+  // B 가 이미 썼다면 A 는 여전히 막힌다.
+  const lastAppliedRef = useRef(0)
+  // 이 화면을 떠나는 중(나가기 성공) 표시.
+  // 나가기가 홈으로 보낸 뒤 뒤늦게 끝난 refreshDays 가 접근 상실로 판정하면,
+  // 스스로 나간 사용자에게 사라지는 화면 위로 오류 배너가 한 번 스쳐 지나간다.
+  // 이미 아는 사실을 알리는 안내라 이 표시로 접어 둔다.
+  const leavingTripRef = useRef(false)
+
   const refreshDays = useCallback(async () => {
+    const token = ++refreshTokenRef.current
+
     const { data } = await supabase
       .from('days')
       .select('*, places(*)')
       .eq('trip_id', trip.id)
       .order('date', { ascending: true })
 
-    if (data) {
-      setDays(
-        data.map(day => ({
-          ...day,
-          places: (day.places ?? []).sort(
-            (a: Place, b: Place) => (a.order_key < b.order_key ? -1 : 1)
-          ),
-        }))
-      )
+    if (!data) return
+
+    // 빈 배열은 truthy 라 그냥 setDays 하면 화면이 조용히 비워진다.
+    // 여행에서 나간 뒤에는 days_all 정책에 걸려 select 가 전부 걸러져 빈 배열이 오므로,
+    // 앞으로 추가될 mutation 이 같은 함정에 빠져도 여기서 한 번에 걸린다.
+    // 다만 빈 배열을 무조건 실패로 볼 수는 없다 — 하나뿐인 날짜를 지우면 정상적으로 0개가 된다.
+    // 그래서 빈 배열일 때만 멤버십을 확인해 두 경우를 가른다.
+    if (data.length === 0) {
+      const membership = await checkTripMembership(supabase, trip.id, userId)
+      if (membership === 'not-member') {
+        // 스스로 나가서 이미 홈으로 가는 중이라면 아무것도 하지 않는다.
+        // 그러지 않으면 의도한 나가기 위에 오류 배너가 덧씌워진다.
+        if (leavingTripRef.current) return
+        // 접근을 잃었다는 사실만 날짜 탭 아래 배너로 알리고, 화면은 그대로 둔다.
+        // 이 경로는 아무것도 '반영' 하지 않으므로 아래 lastAppliedRef 판정을 거치지 않는다.
+        // 배너는 멱등이고 되돌릴 수 있어 어느 호출이 띄우든 결과가 같다.
+        // 순번을 따져 늦게 출발한 호출에 판정을 넘기면, 그 호출이 중도에 빠져나갔을 때
+        // (days select 실패, 멤버십 조회 unknown) 아무도 알리지 않는 상태로 굳는다.
+        // 접근을 잃으면 Realtime 이벤트도 RLS 에 걸러져 다시 판정할 계기가 오지 않는다.
+        setActionError(t('accessLost'))
+        return
+      }
+      // 조회가 실패하면 어느 쪽인지 알 수 없으므로 화면을 그대로 둔다 (fail-closed)
+      if (membership === 'unknown') return
     }
-  }, [supabase, trip.id])
+
+    // 나보다 늦게 출발한 호출이 이미 반영을 끝냈다면 여기서 조용히 물러난다
+    if (token <= lastAppliedRef.current) return
+    lastAppliedRef.current = token
+
+    setDays(
+      data.map(day => ({
+        ...day,
+        places: (day.places ?? []).sort(
+          (a: Place, b: Place) => (a.order_key < b.order_key ? -1 : 1)
+        ),
+      }))
+    )
+  }, [supabase, trip.id, userId, t])
 
   // 이벤트가 몰릴 때(드래그 정렬, 일괄 삭제) refetch를 한 번으로 합침
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -401,10 +451,32 @@ export default function TripView({ trip, days: initialDays }: Props) {
       // places.day_id 는 days(id) on delete cascade 라 날짜만 지우면 장소도 함께 지워진다.
       // (cascade 는 테이블 소유자 권한으로 돌아 호출자의 RLS 를 타지 않는다)
       // 장소를 먼저 지우면 날짜 삭제가 실패했을 때 장소만 영영 사라진 상태로 남는다.
-      const { error: dayError } = await supabase.from('days').delete().eq('id', dayId)
+      // delete 는 RLS 에 막혀 한 행도 지우지 못해도 error 가 null 이라 지워진 행 수까지 봐야 한다.
+      // 다른 탭에서 이 여행을 나간 뒤라면 days_all 정책에 막혀 0행이 되는데, 그대로 진행하면
+      // 이어지는 refreshDays 의 select 도 전부 걸러져 날짜와 장소가 사라진 화면만 남는다.
+      // 사용자는 에러 한 줄 없이 자기가 여행을 통째로 지웠다고 믿게 된다.
+      const { data: deletedDays, error: dayError } = await supabase
+        .from('days')
+        .delete()
+        .eq('id', dayId)
+        .select('id')
       if (dayError) {
         setActionError(t('deleteDayFailed'))
         return
+      }
+
+      // 0행에는 두 상황이 섞여 있다.
+      //   (a) 다른 멤버(또는 다른 탭)가 이 날짜를 먼저 지웠다 → 사용자가 원한 상태에 이미 도달했다
+      //   (b) 내가 이 여행에서 나가 days_all 정책에 막혔다 → 실패
+      // 경합 창은 좁지 않다. 위 window.confirm 은 이벤트 루프와 렌더링을 통째로 멈추므로
+      // 대화상자가 떠 있는 동안 도착한 Realtime 이벤트가 화면에 반영되지 않은 채 몇 분도 열려 있다.
+      if (!deletedDays || deletedDays.length === 0) {
+        const membership = await checkTripMembership(supabase, trip.id, userId)
+        if (membership !== 'member') {
+          setActionError(t('deleteDayFailed'))
+          return
+        }
+        // (a) 다. 아래 성공 처리를 그대로 이어 간다.
       }
 
       // 지운 날짜에 있던 장소를 보고 있었다면 포커스도 같은 커밋에서 함께 푼다.
@@ -547,7 +619,15 @@ export default function TripView({ trip, days: initialDays }: Props) {
           </p>
         </div>
         {/* 더보기 메뉴 */}
-        <HeaderMenu tripId={trip.id} inviteToken={trip.invite_token} />
+        {/* 여행을 만든 사람은 나가지 못한다 (schema.sql 의 trip_members_delete 와 같은 조건) */}
+        <HeaderMenu
+          tripId={trip.id}
+          inviteToken={trip.invite_token}
+          userId={userId}
+          canLeave={trip.created_by !== userId}
+          onError={setActionError}
+          onLeaving={() => { leavingTripRef.current = true }}
+        />
       </header>
 
       {/* 날짜 탭 + 편집 토글 */}
@@ -599,7 +679,7 @@ export default function TripView({ trip, days: initialDays }: Props) {
         </div>
       </div>
 
-      {/* 날짜 추가/삭제 실패 안내 */}
+      {/* 날짜 추가/삭제, 여행 나가기 실패, 접근 상실 안내 */}
       {actionError && (
         <div className="flex items-start gap-2 px-4 pb-2">
           <p role="alert" className="flex-1 text-xs text-red-600">{actionError}</p>
@@ -834,6 +914,8 @@ export default function TripView({ trip, days: initialDays }: Props) {
         <div ref={setScrollContainer} className="flex-1 overflow-y-auto">
           <PlaceList
             days={days}
+            tripId={trip.id}
+            userId={userId}
             editMode={editMode}
             onRefresh={refreshDays}
             onFocusPlace={(place) => {
@@ -849,6 +931,8 @@ export default function TripView({ trip, days: initialDays }: Props) {
         <EditPlaceModal
           place={editingPlace}
           days={days}
+          tripId={trip.id}
+          userId={userId}
           onClose={() => setEditingPlace(null)}
           onSave={refreshDays}
         />
@@ -864,16 +948,33 @@ export default function TripView({ trip, days: initialDays }: Props) {
   )
 }
 
-// 헤더 더보기 메뉴 (가져오기 + 초대)
-function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: string }) {
+// 헤더 더보기 메뉴 (가져오기 + 초대 + 나가기)
+function HeaderMenu({
+  tripId,
+  inviteToken,
+  userId,
+  canLeave,
+  onError,
+  onLeaving,
+}: {
+  tripId: string
+  inviteToken: string
+  userId: string
+  canLeave: boolean
+  onError: (message: string) => void
+  // 나가기가 확정되어 이 화면을 떠난다고 본체에 알린다 (본체는 뒤늦은 접근 상실 안내를 접는다)
+  onLeaving: () => void
+}) {
   const t = useTranslations('trip.view')
   const tCommon = useTranslations('common')
   const tNav = useTranslations('nav')
   const locale = useLocale()
   const router = useRouter()
+  const supabase = createClient()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [manualCopyUrl, setManualCopyUrl] = useState<string | null>(null)
+  const [leaving, setLeaving] = useState(false)
   const [isPending, startTransition] = useTransition()
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -929,6 +1030,100 @@ function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: stri
     }
   }
 
+  async function leaveTrip() {
+    if (!window.confirm(t('leaveTripConfirm'))) return
+
+    // 연타 방지 — confirm 이 모달이라 실제로 겹쳐 들어오지는 않지만,
+    // 가드는 막으려는 상태를 세우는 자리에 붙여 두어야 읽을 때 짝이 보인다.
+    if (leaving) return
+    setLeaving(true)
+    try {
+      // .select('user_id') 로 실제 지워진 행을 받아 온다.
+      // PostgREST 의 delete 는 RLS 에 막혀 한 행도 지우지 못해도 error 가 null 이라
+      // if (error) 만 보면 실패를 성공으로 오인해 홈으로 보내게 된다.
+      // 사용자는 나갔다고 믿지만 멤버십은 그대로 남는다 → 지워진 행 수까지 확인한다.
+      const { data, error } = await supabase
+        .from('trip_members')
+        .delete()
+        .eq('trip_id', tripId)
+        .eq('user_id', userId)
+        .select('user_id')
+
+      if (error) {
+        failLeave()
+        return
+      }
+
+      // 0행에는 서로 다른 두 상황이 섞여 있어 그것만으로는 성공/실패를 가릴 수 없다.
+      //   (a) 다른 탭에서 이미 나갔다 → 지울 행이 없었을 뿐 실제로는 성공한 상태
+      //   (b) RLS 에 막혔다 → 실패. 여행을 만든 사람이 직접 호출했거나, 새 DB 에
+      //       schema.sql 을 다시 돌리지 않아 trip_members_delete 만 빠진 경우다.
+      // 0행을 그냥 성공으로 보면 (b) 에서 사용자가 "나갔다"는 화면을 보고 홈으로 가지만
+      // 실제로는 나가지 못한 상태가 되고 아무도 이상을 눈치채지 못한다.
+      // 그래서 0행일 때만 자기 멤버십을 한 번 더 조회한다. 이 조회는 trip_members_select
+      // 정책(= is_trip_member(trip_id))을 타므로 (a) 는 null 이 오고 (b) 는 자기 행이
+      // 그대로 조회된다. 추가 왕복은 드문 실패 경로에서만 생긴다.
+      //
+      // 가리지 못하는 경우 하나 — 정책이 하나도 없는 DB 라면 이 조회도 0행이라 (a) 로
+      // 잘못 본다. 다만 그런 DB 에서는 trips_select 도 없어 trip/[id]/page.tsx 의 여행
+      // 조회부터 비어 notFound 로 끝나므로, 이 버튼이 있는 화면 자체에 닿을 수 없다.
+      if (!data || data.length === 0) {
+        // 'not-member' 만 (a) 다. 아직 멤버면 (b) 이고,
+        // 조회가 실패하면 나갔는지 알 수 없으므로 둘 다 실패로 본다 (fail-closed).
+        const membership = await checkTripMembership(supabase, tripId, userId)
+        if (membership !== 'not-member') {
+          failLeave()
+          return
+        }
+
+        // 'not-member' 를 성공으로 보기 전에 지금 세션의 사용자가 정말 userId 인지 확인한다.
+        // trip_members_select(= is_trip_member(trip_id))는 브라우저 세션의 auth.uid() 로
+        // 평가되는데, userId 는 서버 렌더 시점의 값이라 둘이 어긋날 수 있다
+        // (다른 탭에서 계정을 바꿨거나 로그아웃해 세션이 anon 으로 떨어진 경우).
+        // 그러면 delete 는 RLS 에 막혀 0행·에러 없이 끝나고 뒤이은 조회도 0행이라
+        // 'not-member' 가 나와, 멤버십이 그대로 남은 채 "나갔다"고 판단해 홈으로 보낸다.
+        // 이 코드가 막으려는 조용한 실패와 정확히 같은 모양이다.
+        // 조회가 실패하면 어긋났는지 알 수 없으므로 그것도 실패로 본다 (fail-closed).
+        //
+        // 이 확인은 0행 경로에서만 한다. 다른 호출부는 'not-member' 를 실패로 보므로
+        // 계정이 어긋나도 fail-closed 라 안전하다.
+        const { data: authData, error: authError } = await supabase.auth.getUser()
+        if (authError || authData.user?.id !== userId) {
+          failLeave()
+          return
+        }
+      }
+
+      // 나가기가 확정된 지금 본체에 알린다. 아직 응답을 기다리던 refreshDays 가 뒤늦게
+      // 접근 상실로 판정해 사라지는 화면 위에 오류 배너를 띄우는 것을 막기 위해서다.
+      // 요청을 보내기 전이 아니라 성공이 확정된 뒤에 알리는 이유:
+      //   - 요청 전에 세우면 나가기가 실패했을 때(RLS 차단 등) 화면에 그대로 남는데 표시만
+      //     켜져 있어, 정말로 접근을 잃었을 때의 안내까지 계속 삼킨다. 실패 경로마다
+      //     되돌리기를 빠뜨리지 않아야 하는 구조가 된다.
+      //   - 여기서 세우면 이 화면은 반드시 사라지므로 되돌릴 필요가 없다. 그 전에 배너가
+      //     먼저 떴더라도 바로 아래 replace('/') 로 화면째 사라지므로 결과는 같다.
+      onLeaving()
+
+      // 성공하면 leaving 을 되돌리지 않는다. 이 화면은 곧 사라지므로,
+      // 이동이 끝나기 전에 버튼이 다시 눌리는 일만 막으면 된다.
+      // '/' 는 쿠키로 인증하는 dynamic 라우트라 staleTimes.dynamic 기본값 0 에서
+      // 이동할 때마다 서버에서 다시 가져온다. router.refresh() 는 같은 것을 한 번 더
+      // 가져오는 낭비라 부르지 않는다.
+      router.replace('/')
+    } catch {
+      failLeave()
+    }
+  }
+
+  function failLeave() {
+    setLeaving(false)
+    setOpen(false) // 메뉴는 닫고 안내는 날짜 탭 아래 배너에 띄운다
+    // 메뉴가 사라지면 지금 포커스가 있는 '나가기' 버튼도 함께 언마운트되어
+    // 키보드/스크린리더 포커스가 <body> 로 떨어진다. Escape 처리와 같게 트리거로 되돌린다.
+    triggerRef.current?.focus()
+    onError(t('leaveTripFailed'))
+  }
+
   return (
     <div ref={ref} className="relative shrink-0">
       <button
@@ -981,6 +1176,17 @@ function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: stri
           >
             {`🌐 ${nextLocaleName}`}
           </button>
+          {canLeave && (
+            <button
+              onClick={leaveTrip}
+              disabled={leaving}
+              aria-busy={leaving}
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50"
+            >
+              {tNav('leaveTrip')}
+            </button>
+          )}
         </div>
       )}
     </div>

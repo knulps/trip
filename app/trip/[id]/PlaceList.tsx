@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from 'next-intl'
 import type { Place, Day } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
 import { formatDayDate } from '@/lib/format'
+import { checkTripMembership } from '@/lib/trip-membership'
 import Link from 'next/link'
 import { generateKeyBetween } from 'fractional-indexing'
 import {
@@ -30,6 +31,8 @@ type DayWithPlaces = Day & { places: Place[] }
 
 interface Props {
   days: DayWithPlaces[]
+  tripId: string
+  userId: string
   editMode: boolean
   onRefresh: () => void
   onFocusPlace?: (place: Place) => void
@@ -160,9 +163,13 @@ function SortablePlaceItem({
 /* ── DraggableDayPlaces: one day's places wrapped in DndContext ── */
 function DraggableDayPlaces({
   places,
+  tripId,
+  userId,
   onRefresh,
 }: {
   places: Place[]
+  tripId: string
+  userId: string
   onRefresh: () => void
 }) {
   const t = useTranslations('trip.placeList')
@@ -180,13 +187,33 @@ function DraggableDayPlaces({
 
   const deletePlace = useCallback(async (id: string) => {
     if (!window.confirm(t('confirmDelete'))) return
-    const { error } = await supabase.from('places').delete().eq('id', id)
+    // delete 는 RLS 에 막혀 한 행도 지우지 못해도 error 가 null 이라 지워진 행 수까지 봐야 한다.
+    // 다른 탭에서 이 여행을 나간 뒤라면 places_all 정책에 막혀 0행이 되는데, 그대로 진행하면
+    // 이어지는 갱신 조회도 전부 걸러져 화면만 비고 에러는 뜨지 않는다.
+    // 사용자는 자기가 지웠다고 믿지만 실제 데이터는 그대로 남는다.
+    const { data: deleted, error } = await supabase
+      .from('places')
+      .delete()
+      .eq('id', id)
+      .select('id')
     if (error) {
       window.alert(t('deleteFailed'))
       return
     }
+    // 0행이 곧 실패는 아니다.
+    //   (a) 다른 멤버(또는 다른 탭)가 이 장소를 먼저 지웠다 → 원한 상태에 이미 도달했다
+    //   (b) 내가 이 여행에서 나가 정책에 막혔다 → 실패
+    // 위 window.confirm 이 이벤트 루프와 렌더링을 통째로 멈추는 동안 도착한 Realtime 이벤트는
+    // 큐에 쌓인 채 화면에 반영되지 않으므로, 이 경합 창은 몇 분도 열려 있을 수 있다.
+    if (!deleted || deleted.length === 0) {
+      const membership = await checkTripMembership(supabase, tripId, userId)
+      if (membership !== 'member') {
+        window.alert(t('deleteFailed'))
+        return
+      }
+    }
     onRefresh()
-  }, [supabase, onRefresh, t])
+  }, [supabase, tripId, userId, onRefresh, t])
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -207,11 +234,21 @@ function DraggableDayPlaces({
     try {
       // 두 경계가 같거나 순서가 뒤집혀 있으면 generateKeyBetween 이 throw 한다.
       const newKey = generateKeyBetween(before, after)
-      const { error } = await supabase
+      // update 도 delete 와 똑같이 RLS 에 막히면 0행 + error null 이다.
+      // 그대로 두면 여행에서 나간 뒤 순서를 바꿨을 때 에러 한 줄 없이 갱신 조회까지 비어
+      // 날짜와 장소가 전부 사라진 화면만 남는다 → 바뀐 행 수까지 확인한다.
+      const { data: updated, error } = await supabase
         .from('places')
         .update({ order_key: newKey })
         .eq('id', active.id as string)
+        .select('id')
       if (error) throw error
+      // 0행이면 멤버십으로 가른다. 아직 멤버라면 그 사이 다른 멤버가 이 장소를 지운 것이라
+      // 되돌릴 순서 자체가 없으므로 갱신만 돌린다. 멤버가 아니거나 확인에 실패하면 실패다.
+      if (!updated || updated.length === 0) {
+        const membership = await checkTripMembership(supabase, tripId, userId)
+        if (membership !== 'member') throw new Error('trip access lost')
+      }
       onRefresh()
     } catch {
       setLocalPlaces(previous) // 낙관적 순서 되돌리기
@@ -233,7 +270,7 @@ function DraggableDayPlaces({
 }
 
 /* ── Main PlaceList ── */
-export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onSelectRoute, dayRefs, activeRoutePlaceIds }: Props) {
+export default function PlaceList({ days, tripId, userId, editMode, onRefresh, onFocusPlace, onSelectRoute, dayRefs, activeRoutePlaceIds }: Props) {
   const t = useTranslations('trip.placeList')
   const tCommon = useTranslations('common')
   const format = useFormatter()
@@ -242,13 +279,27 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
 
   const deleteAllPlaces = useCallback(async (dayId: string, dayNumber: number, count: number) => {
     if (!window.confirm(t('confirmDeleteAll', { day: dayNumber, count }))) return
-    const { error } = await supabase.from('places').delete().eq('day_id', dayId)
+    // 여기서도 지워진 행 수를 확인한다 (이유는 위 deletePlace 주석 참고).
+    // '버튼이 보였으니 지울 대상이 있었다' 고 볼 수는 없다 — 그건 렌더 시점의 스냅샷일 뿐이고,
+    // 그 사이 다른 멤버가 같은 날짜를 비웠을 수 있다. 그래서 0행도 멤버십으로 가른다.
+    const { data: deleted, error } = await supabase
+      .from('places')
+      .delete()
+      .eq('day_id', dayId)
+      .select('id')
     if (error) {
       window.alert(t('deleteAllFailed'))
       return
     }
+    if (!deleted || deleted.length === 0) {
+      const membership = await checkTripMembership(supabase, tripId, userId)
+      if (membership !== 'member') {
+        window.alert(t('deleteAllFailed'))
+        return
+      }
+    }
     onRefresh()
-  }, [supabase, onRefresh, t])
+  }, [supabase, tripId, userId, onRefresh, t])
 
   if (days.length === 0) {
     return (
@@ -314,7 +365,7 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
                   <p className="text-sm text-gray-400">{t('empty')}</p>
                 </div>
               ) : editMode ? (
-                <DraggableDayPlaces places={day.places} onRefresh={onRefresh} />
+                <DraggableDayPlaces places={day.places} tripId={tripId} userId={userId} onRefresh={onRefresh} />
               ) : (
                 <ol className="flex flex-col px-4">
                   {day.places.map((place, i) => (
@@ -343,6 +394,8 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
         <EditPlaceModal
           place={editingPlace}
           days={days}
+          tripId={tripId}
+          userId={userId}
           onClose={() => setEditingPlace(null)}
           onSave={onRefresh}
         />
