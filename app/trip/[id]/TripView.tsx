@@ -71,7 +71,6 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
   const tCommon = useTranslations('common')
   const tNav = useTranslations('nav')
   const format = useFormatter()
-  const router = useRouter()
 
   const [days, setDays] = useState(initialDays)
   const [selectedDayId, setSelectedDayId] = useState(initialDays[0]?.id ?? null)
@@ -186,8 +185,9 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
   // B 가 이미 썼다면 A 는 여전히 막힌다.
   const lastAppliedRef = useRef(0)
   // 이 화면을 떠나는 중(나가기 성공) 표시.
-  // 나가기가 홈으로 보낸 뒤 뒤늦게 끝난 refreshDays 가 접근 상실로 판정해
-  // '/?error=access_lost' 로 그 이동을 덮어쓰면, 스스로 나간 사용자가 오류 배너를 보게 된다.
+  // 나가기가 홈으로 보낸 뒤 뒤늦게 끝난 refreshDays 가 접근 상실로 판정하면,
+  // 스스로 나간 사용자에게 사라지는 화면 위로 오류 배너가 한 번 스쳐 지나간다.
+  // 이미 아는 사실을 알리는 안내라 이 표시로 접어 둔다.
   const leavingTripRef = useRef(false)
 
   const refreshDays = useCallback(async () => {
@@ -212,20 +212,13 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
         // 스스로 나가서 이미 홈으로 가는 중이라면 아무것도 하지 않는다.
         // 그러지 않으면 의도한 나가기 위에 오류 배너가 덧씌워진다.
         if (leavingTripRef.current) return
-        // 홈으로 보내는 것도 '반영' 이라 setDays 와 같은 판정을 거친다.
-        // 늦게 끝난 옛 응답이 뒤늦게 접근 상실로 판정해 최신 화면을 덮는 것을 막는다.
-        if (token <= lastAppliedRef.current) return
-        // 화면 이동은 setDays 와 달리 되돌릴 수 없어 한 겹 더 보수적으로 본다.
-        // 나보다 늦게 출발한 호출이 아직 응답을 기다리는 중이라면 그쪽에 판정을 넘긴다.
-        // 세션이 잠깐 끊긴 사이에 나간 요청은 auth.uid() 가 없어 멤버십 조회가 0행으로
-        // 돌아오는데, 그걸 접근 상실로 확정해 버리면 세션이 되살아난 뒤의 정상 응답이
-        // 화면에 닿기도 전에 언마운트된다. 가장 늦게 출발한 호출은 이 조건을 항상
-        // 통과하므로 아무도 판정하지 못하고 멈추는 일은 생기지 않는다.
-        if (token !== refreshTokenRef.current) return
-        lastAppliedRef.current = token
-        // 이 여행에 더는 접근할 수 없다. 여기서 배너를 띄워 봐야 곧바로 목록으로 이동해
-        // 스쳐 지나가므로, 홈이 error 쿼리를 보고 띄우는 배너에 실어 보낸다.
-        router.replace('/?error=access_lost')
+        // 접근을 잃었다는 사실만 화면 하단 배너로 알리고, 화면은 그대로 둔다.
+        // 이 경로는 아무것도 '반영' 하지 않으므로 아래 lastAppliedRef 판정을 거치지 않는다.
+        // 배너는 멱등이고 되돌릴 수 있어 어느 호출이 띄우든 결과가 같다.
+        // 순번을 따져 늦게 출발한 호출에 판정을 넘기면, 그 호출이 중도에 빠져나갔을 때
+        // (days select 실패, 멤버십 조회 unknown) 아무도 알리지 않는 상태로 굳는다.
+        // 접근을 잃으면 Realtime 이벤트도 RLS 에 걸러져 다시 판정할 계기가 오지 않는다.
+        setActionError(t('accessLost'))
         return
       }
       // 조회가 실패하면 어느 쪽인지 알 수 없으므로 화면을 그대로 둔다 (fail-closed)
@@ -244,7 +237,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
         ),
       }))
     )
-  }, [supabase, trip.id, userId, router])
+  }, [supabase, trip.id, userId, t])
 
   // 이벤트가 몰릴 때(드래그 정렬, 일괄 삭제) refetch를 한 번으로 합침
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -686,7 +679,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
         </div>
       </div>
 
-      {/* 날짜 추가/삭제, 여행 나가기 실패 안내 */}
+      {/* 날짜 추가/삭제, 여행 나가기 실패, 접근 상실 안내 */}
       {actionError && (
         <div className="flex items-start gap-2 px-4 pb-2">
           <p role="alert" className="flex-1 text-xs text-red-600">{actionError}</p>
@@ -1102,13 +1095,13 @@ function HeaderMenu({
       }
 
       // 나가기가 확정된 지금 본체에 알린다. 아직 응답을 기다리던 refreshDays 가 뒤늦게
-      // 접근 상실로 판정해 '/?error=access_lost' 로 아래 이동을 덮어쓰는 것을 막기 위해서다.
+      // 접근 상실로 판정해 사라지는 화면 위에 오류 배너를 띄우는 것을 막기 위해서다.
       // 요청을 보내기 전이 아니라 성공이 확정된 뒤에 알리는 이유:
       //   - 요청 전에 세우면 나가기가 실패했을 때(RLS 차단 등) 화면에 그대로 남는데 표시만
       //     켜져 있어, 정말로 접근을 잃었을 때의 안내까지 계속 삼킨다. 실패 경로마다
       //     되돌리기를 빠뜨리지 않아야 하는 구조가 된다.
-      //   - 여기서 세우면 이 화면은 반드시 사라지므로 되돌릴 필요가 없다. 그 전에 접근 상실
-      //     판정이 먼저 나가더라도 바로 아래 replace('/') 가 그것을 덮으므로 결과는 같다.
+      //   - 여기서 세우면 이 화면은 반드시 사라지므로 되돌릴 필요가 없다. 그 전에 배너가
+      //     먼저 떴더라도 바로 아래 replace('/') 로 화면째 사라지므로 결과는 같다.
       onLeaving()
 
       // 성공하면 leaving 을 되돌리지 않는다. 이 화면은 곧 사라지므로,

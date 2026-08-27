@@ -27,8 +27,7 @@
     "createFirst": "Create your first trip",
     "inviteHint": "Came from an invite link? Open the link again.",
     "errorInvalidInvite": "This invite link is invalid or has expired.",
-    "errorInviteFailed": "We couldn't process the invite. Please try again in a moment.",
-    "errorAccessLost": "You no longer have access to that trip."
+    "errorInviteFailed": "We couldn't process the invite. Please try again in a moment."
   },
   "auth": {
     "tagline": "Plan trips together with friends",
@@ -112,7 +111,8 @@
       "distanceError": "Couldn't load the distance.",
       "distanceEmpty": "No routes available.",
       "leaveTripConfirm": "You will leave this trip. You'll need an invite link to rejoin. Continue?",
-      "leaveTripFailed": "Couldn't leave the trip. Please try again in a moment."
+      "leaveTripFailed": "Couldn't leave the trip. Please try again in a moment.",
+      "accessLost": "You no longer have access to this trip."
     },
     "placeList": {
       "addPlace": "+ Add place",

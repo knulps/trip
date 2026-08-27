@@ -27,8 +27,7 @@
     "createFirst": "첫 여행 만들기",
     "inviteHint": "초대 링크로 들어오셨나요? 받은 링크를 다시 열어 주세요.",
     "errorInvalidInvite": "초대 링크가 올바르지 않거나 만료되었습니다.",
-    "errorInviteFailed": "초대를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-    "errorAccessLost": "이 여행에 더 이상 접근할 수 없습니다."
+    "errorInviteFailed": "초대를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요."
   },
   "auth": {
     "tagline": "지인들과 함께 만드는 여행 일정",
@@ -112,7 +111,8 @@
       "distanceError": "거리를 불러오지 못했습니다.",
       "distanceEmpty": "이용할 수 있는 경로가 없습니다.",
       "leaveTripConfirm": "이 여행에서 나갑니다. 다시 참여하려면 초대 링크가 필요합니다. 계속할까요?",
-      "leaveTripFailed": "여행에서 나가지 못했습니다. 잠시 후 다시 시도해 주세요."
+      "leaveTripFailed": "여행에서 나가지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "accessLost": "이 여행에 더 이상 접근할 수 없습니다."
     },
     "placeList": {
       "addPlace": "+ 장소 추가",

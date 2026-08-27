@@ -6,23 +6,22 @@ import { getTranslations, getFormatter } from 'next-intl/server'
 import LocaleSwitcher from '@/components/LocaleSwitcher'
 import { formatFullDate } from '@/lib/format'
 
-// 홈으로 되돌려 보내는 쪽(초대 라우트, 접근을 잃은 여행 화면)이 붙여 보내는 error 쿼리 값
-const HOME_ERROR_KEYS = {
+// 초대 라우트가 실패 시 붙여 보내는 error 쿼리 값
+const INVITE_ERROR_KEYS = {
   invalid_invite: 'errorInvalidInvite',
   invite_failed: 'errorInviteFailed',
-  access_lost: 'errorAccessLost',
 } as const
 
-type HomeErrorCode = keyof typeof HOME_ERROR_KEYS
+type InviteErrorCode = keyof typeof INVITE_ERROR_KEYS
 
-function toHomeErrorCode(value: string | string[] | undefined): HomeErrorCode | null {
+function toInviteErrorCode(value: string | string[] | undefined): InviteErrorCode | null {
   const code = Array.isArray(value) ? value[0] : value
   // in 연산자는 prototype chain 까지 훑어 constructor, toString, valueOf, __proto__ 같은
-  // Object.prototype 의 키도 통과시킨다. 그러면 HOME_ERROR_KEYS[code] 가 번역 키 문자열이
+  // Object.prototype 의 키도 통과시킨다. 그러면 INVITE_ERROR_KEYS[code] 가 번역 키 문자열이
   // 아니라 함수를 내놓고, 그 값이 t() 에 들어가면 내부에서 key.split('.') 를 부르다 터진다.
   // 이 페이지는 서버 컴포넌트라 그대로 500 이 된다 (?error=constructor 한 방).
   // 그래서 객체 자신이 직접 가진 키인지만 본다.
-  if (code && Object.hasOwn(HOME_ERROR_KEYS, code)) return code as HomeErrorCode
+  if (code && Object.hasOwn(INVITE_ERROR_KEYS, code)) return code as InviteErrorCode
   return null
 }
 
@@ -54,7 +53,7 @@ export default async function HomePage({
   if (!user) redirect('/login')
 
   // Next 16 에서 searchParams 는 Promise 라 await 이 필요하다
-  const homeError = toHomeErrorCode((await searchParams).error)
+  const inviteError = toInviteErrorCode((await searchParams).error)
 
   // 내가 멤버인 여행 목록 (trip_members → trips JOIN)
   const { data: memberships } = await supabase
@@ -86,11 +85,11 @@ export default async function HomePage({
         </div>
       </header>
 
-      {/* 홈으로 되돌아온 이유 안내 — 닫기는 error 쿼리를 뗀 '/' 로 이동해서 처리한다 */}
-      {homeError && (
+      {/* 초대 실패 안내 — 닫기는 error 쿼리를 뗀 '/' 로 이동해서 처리한다 */}
+      {inviteError && (
         <div className="px-5 pb-3">
           <div role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3">
-            <p className="flex-1 text-xs text-red-600">{t(HOME_ERROR_KEYS[homeError])}</p>
+            <p className="flex-1 text-xs text-red-600">{t(INVITE_ERROR_KEYS[inviteError])}</p>
             <Link
               href="/"
               aria-label={tCommon('close')}
