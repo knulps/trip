@@ -65,8 +65,7 @@ interface Props {
   userId: string
 }
 
-// userId는 page.tsx에서 넘겨주지만 이 화면에서는 아직 쓰지 않으므로 구조 분해하지 않음
-export default function TripView({ trip, days: initialDays }: Props) {
+export default function TripView({ trip, days: initialDays, userId }: Props) {
   const t = useTranslations('trip.view')
   const tCommon = useTranslations('common')
   const tNav = useTranslations('nav')
@@ -547,7 +546,14 @@ export default function TripView({ trip, days: initialDays }: Props) {
           </p>
         </div>
         {/* 더보기 메뉴 */}
-        <HeaderMenu tripId={trip.id} inviteToken={trip.invite_token} />
+        {/* 여행을 만든 사람은 나가지 못한다 (schema.sql 의 trip_members_delete 와 같은 조건) */}
+        <HeaderMenu
+          tripId={trip.id}
+          inviteToken={trip.invite_token}
+          userId={userId}
+          canLeave={trip.created_by !== userId}
+          onError={setActionError}
+        />
       </header>
 
       {/* 날짜 탭 + 편집 토글 */}
@@ -599,7 +605,7 @@ export default function TripView({ trip, days: initialDays }: Props) {
         </div>
       </div>
 
-      {/* 날짜 추가/삭제 실패 안내 */}
+      {/* 날짜 추가/삭제, 여행 나가기 실패 안내 */}
       {actionError && (
         <div className="flex items-start gap-2 px-4 pb-2">
           <p role="alert" className="flex-1 text-xs text-red-600">{actionError}</p>
@@ -864,16 +870,30 @@ export default function TripView({ trip, days: initialDays }: Props) {
   )
 }
 
-// 헤더 더보기 메뉴 (가져오기 + 초대)
-function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: string }) {
+// 헤더 더보기 메뉴 (가져오기 + 초대 + 나가기)
+function HeaderMenu({
+  tripId,
+  inviteToken,
+  userId,
+  canLeave,
+  onError,
+}: {
+  tripId: string
+  inviteToken: string
+  userId: string
+  canLeave: boolean
+  onError: (message: string) => void
+}) {
   const t = useTranslations('trip.view')
   const tCommon = useTranslations('common')
   const tNav = useTranslations('nav')
   const locale = useLocale()
   const router = useRouter()
+  const supabase = createClient()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [manualCopyUrl, setManualCopyUrl] = useState<string | null>(null)
+  const [leaving, setLeaving] = useState(false)
   const [isPending, startTransition] = useTransition()
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -929,6 +949,43 @@ function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: stri
     }
   }
 
+  async function leaveTrip() {
+    if (leaving) return // 연타 방지
+    if (!window.confirm(t('leaveTripConfirm'))) return
+
+    setLeaving(true)
+    try {
+      // .select('user_id') 로 실제 지워진 행을 받아 온다.
+      // PostgREST 의 delete 는 RLS 에 막혀 한 행도 지우지 못해도 error 가 null 이라
+      // if (error) 만 보면 실패를 성공으로 오인해 홈으로 보내게 된다.
+      // 사용자는 나갔다고 믿지만 멤버십은 그대로 남는다 → 지워진 행 수까지 확인한다.
+      const { data, error } = await supabase
+        .from('trip_members')
+        .delete()
+        .eq('trip_id', tripId)
+        .eq('user_id', userId)
+        .select('user_id')
+
+      if (error || !data || data.length === 0) {
+        failLeave()
+        return
+      }
+
+      // 성공하면 leaving 을 되돌리지 않는다. 이 화면은 곧 사라지므로,
+      // 이동이 끝나기 전에 버튼이 다시 눌리는 일만 막으면 된다.
+      router.replace('/')
+      router.refresh()
+    } catch {
+      failLeave()
+    }
+  }
+
+  function failLeave() {
+    setLeaving(false)
+    setOpen(false) // 메뉴는 닫고 안내는 화면 하단에 띄운다
+    onError(t('leaveTripFailed'))
+  }
+
   return (
     <div ref={ref} className="relative shrink-0">
       <button
@@ -981,6 +1038,17 @@ function HeaderMenu({ tripId, inviteToken }: { tripId: string; inviteToken: stri
           >
             {`🌐 ${nextLocaleName}`}
           </button>
+          {canLeave && (
+            <button
+              onClick={leaveTrip}
+              disabled={leaving}
+              aria-busy={leaving}
+              role="menuitem"
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50"
+            >
+              {tNav('leaveTrip')}
+            </button>
+          )}
         </div>
       )}
     </div>
