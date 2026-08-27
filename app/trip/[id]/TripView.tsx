@@ -171,7 +171,19 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
   // Supabase Realtime — places / days 변경 실시간 반영
   const supabase = createClient()
 
+  // refreshDays 는 호출이 겹칠 수 있는데, 응답이 보낸 순서대로 돌아온다는 보장이 없다.
+  // 특히 빈 결과일 때만 아래에서 멤버십 조회를 한 번 더 하므로 빈 응답만 선택적으로 느려진다.
+  // (마지막 날짜 삭제 → 곧바로 날짜 추가 하면, 늦게 끝난 빈 응답이 방금 추가한 날짜를 덮어 지운다)
+  // 호출마다 토큰을 올리고 상태를 쓰기 직전에 자기 토큰이 아직 최신인지 확인해 막는다.
+  const refreshTokenRef = useRef(0)
+  // 이 화면을 떠나는 중(나가기 성공) 표시.
+  // 나가기가 홈으로 보낸 뒤 뒤늦게 끝난 refreshDays 가 접근 상실로 판정해
+  // '/?error=access_lost' 로 그 이동을 덮어쓰면, 스스로 나간 사용자가 오류 배너를 보게 된다.
+  const leavingTripRef = useRef(false)
+
   const refreshDays = useCallback(async () => {
+    const token = ++refreshTokenRef.current
+
     const { data } = await supabase
       .from('days')
       .select('*, places(*)')
@@ -187,7 +199,12 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
     // 그래서 빈 배열일 때만 멤버십을 확인해 두 경우를 가른다.
     if (data.length === 0) {
       const membership = await checkTripMembership(supabase, trip.id, userId)
+      // 비동기 경계가 days select 와 이 조회 두 곳이므로, 둘을 모두 지난 뒤에 확인해야 한다
+      if (token !== refreshTokenRef.current) return
       if (membership === 'not-member') {
+        // 스스로 나가서 이미 홈으로 가는 중이라면 아무것도 하지 않는다.
+        // 그러지 않으면 의도한 나가기 위에 오류 배너가 덧씌워진다.
+        if (leavingTripRef.current) return
         // 이 여행에 더는 접근할 수 없다. 여기서 배너를 띄워 봐야 곧바로 목록으로 이동해
         // 스쳐 지나가므로, 홈이 error 쿼리를 보고 띄우는 배너에 실어 보낸다.
         router.replace('/?error=access_lost')
@@ -196,6 +213,9 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
       // 조회가 실패하면 어느 쪽인지 알 수 없으므로 화면을 그대로 둔다 (fail-closed)
       if (membership === 'unknown') return
     }
+
+    // 나보다 늦게 출발한 호출이 이미 상태를 썼다면 여기서 조용히 물러난다
+    if (token !== refreshTokenRef.current) return
 
     setDays(
       data.map(day => ({
@@ -594,6 +614,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
           userId={userId}
           canLeave={trip.created_by !== userId}
           onError={setActionError}
+          onLeaving={() => { leavingTripRef.current = true }}
         />
       </header>
 
@@ -922,12 +943,15 @@ function HeaderMenu({
   userId,
   canLeave,
   onError,
+  onLeaving,
 }: {
   tripId: string
   inviteToken: string
   userId: string
   canLeave: boolean
   onError: (message: string) => void
+  // 나가기가 확정되어 이 화면을 떠난다고 본체에 알린다 (본체는 뒤늦은 접근 상실 안내를 접는다)
+  onLeaving: () => void
 }) {
   const t = useTranslations('trip.view')
   const tCommon = useTranslations('common')
@@ -1040,6 +1064,16 @@ function HeaderMenu({
           return
         }
       }
+
+      // 나가기가 확정된 지금 본체에 알린다. 아직 응답을 기다리던 refreshDays 가 뒤늦게
+      // 접근 상실로 판정해 '/?error=access_lost' 로 아래 이동을 덮어쓰는 것을 막기 위해서다.
+      // 요청을 보내기 전이 아니라 성공이 확정된 뒤에 알리는 이유:
+      //   - 요청 전에 세우면 나가기가 실패했을 때(RLS 차단 등) 화면에 그대로 남는데 표시만
+      //     켜져 있어, 정말로 접근을 잃었을 때의 안내까지 계속 삼킨다. 실패 경로마다
+      //     되돌리기를 빠뜨리지 않아야 하는 구조가 된다.
+      //   - 여기서 세우면 이 화면은 반드시 사라지므로 되돌릴 필요가 없다. 그 전에 접근 상실
+      //     판정이 먼저 나가더라도 바로 아래 replace('/') 가 그것을 덮으므로 결과는 같다.
+      onLeaving()
 
       // 성공하면 leaving 을 되돌리지 않는다. 이 화면은 곧 사라지므로,
       // 이동이 끝나기 전에 버튼이 다시 눌리는 일만 막으면 된다.

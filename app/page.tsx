@@ -17,7 +17,12 @@ type HomeErrorCode = keyof typeof HOME_ERROR_KEYS
 
 function toHomeErrorCode(value: string | string[] | undefined): HomeErrorCode | null {
   const code = Array.isArray(value) ? value[0] : value
-  if (code && code in HOME_ERROR_KEYS) return code as HomeErrorCode
+  // in 연산자는 prototype chain 까지 훑어 constructor, toString, valueOf, __proto__ 같은
+  // Object.prototype 의 키도 통과시킨다. 그러면 HOME_ERROR_KEYS[code] 가 번역 키 문자열이
+  // 아니라 함수를 내놓고, 그 값이 t() 에 들어가면 내부에서 key.split('.') 를 부르다 터진다.
+  // 이 페이지는 서버 컴포넌트라 그대로 500 이 된다 (?error=constructor 한 방).
+  // 그래서 객체 자신이 직접 가진 키인지만 본다.
+  if (code && Object.hasOwn(HOME_ERROR_KEYS, code)) return code as HomeErrorCode
   return null
 }
 
