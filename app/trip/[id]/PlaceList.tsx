@@ -180,8 +180,16 @@ function DraggableDayPlaces({
 
   const deletePlace = useCallback(async (id: string) => {
     if (!window.confirm(t('confirmDelete'))) return
-    const { error } = await supabase.from('places').delete().eq('id', id)
-    if (error) {
+    // delete 는 RLS 에 막혀 한 행도 지우지 못해도 error 가 null 이라 지워진 행 수까지 봐야 한다.
+    // 다른 탭에서 이 여행을 나간 뒤라면 places_all 정책에 막혀 0행이 되는데, 그대로 진행하면
+    // 이어지는 갱신 조회도 전부 걸러져 화면만 비고 에러는 뜨지 않는다.
+    // 사용자는 자기가 지웠다고 믿지만 실제 데이터는 그대로 남는다.
+    const { data: deleted, error } = await supabase
+      .from('places')
+      .delete()
+      .eq('id', id)
+      .select('id')
+    if (error || !deleted || deleted.length === 0) {
       window.alert(t('deleteFailed'))
       return
     }
@@ -242,8 +250,15 @@ export default function PlaceList({ days, editMode, onRefresh, onFocusPlace, onS
 
   const deleteAllPlaces = useCallback(async (dayId: string, dayNumber: number, count: number) => {
     if (!window.confirm(t('confirmDeleteAll', { day: dayNumber, count }))) return
-    const { error } = await supabase.from('places').delete().eq('day_id', dayId)
-    if (error) {
+    // 여기서도 지워진 행 수를 확인한다 (이유는 위 deletePlace 주석 참고).
+    // 이 버튼은 그 날짜에 장소가 1건 이상 있을 때만 그려지므로 지울 대상이 없었을 리 없다.
+    // 즉 0행은 지울 권한이 없었다는 뜻이라 실패로 본다.
+    const { data: deleted, error } = await supabase
+      .from('places')
+      .delete()
+      .eq('day_id', dayId)
+      .select('id')
+    if (error || !deleted || deleted.length === 0) {
       window.alert(t('deleteAllFailed'))
       return
     }

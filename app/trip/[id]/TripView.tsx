@@ -400,8 +400,16 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
       // places.day_id 는 days(id) on delete cascade 라 날짜만 지우면 장소도 함께 지워진다.
       // (cascade 는 테이블 소유자 권한으로 돌아 호출자의 RLS 를 타지 않는다)
       // 장소를 먼저 지우면 날짜 삭제가 실패했을 때 장소만 영영 사라진 상태로 남는다.
-      const { error: dayError } = await supabase.from('days').delete().eq('id', dayId)
-      if (dayError) {
+      // delete 는 RLS 에 막혀 한 행도 지우지 못해도 error 가 null 이라 지워진 행 수까지 봐야 한다.
+      // 다른 탭에서 이 여행을 나간 뒤라면 days_all 정책에 막혀 0행이 되는데, 그대로 진행하면
+      // 이어지는 refreshDays 의 select 도 전부 걸러져 날짜와 장소가 사라진 화면만 남는다.
+      // 사용자는 에러 한 줄 없이 자기가 여행을 통째로 지웠다고 믿게 된다.
+      const { data: deletedDays, error: dayError } = await supabase
+        .from('days')
+        .delete()
+        .eq('id', dayId)
+        .select('id')
+      if (dayError || !deletedDays || deletedDays.length === 0) {
         setActionError(t('deleteDayFailed'))
         return
       }
@@ -966,15 +974,45 @@ function HeaderMenu({
         .eq('user_id', userId)
         .select('user_id')
 
-      if (error || !data || data.length === 0) {
+      if (error) {
         failLeave()
         return
       }
 
+      // 0행에는 서로 다른 두 상황이 섞여 있어 그것만으로는 성공/실패를 가릴 수 없다.
+      //   (a) 다른 탭에서 이미 나갔다 → 지울 행이 없었을 뿐 실제로는 성공한 상태
+      //   (b) RLS 에 막혔다 → 실패. 여행을 만든 사람이 직접 호출했거나, 새 DB 에
+      //       schema.sql 을 다시 돌리지 않아 trip_members_delete 만 빠진 경우다.
+      // 0행을 그냥 성공으로 보면 (b) 에서 사용자가 "나갔다"는 화면을 보고 홈으로 가지만
+      // 실제로는 나가지 못한 상태가 되고 아무도 이상을 눈치채지 못한다.
+      // 그래서 0행일 때만 자기 멤버십을 한 번 더 조회한다. 이 조회는 trip_members_select
+      // 정책(= is_trip_member(trip_id))을 타므로 (a) 는 null 이 오고 (b) 는 자기 행이
+      // 그대로 조회된다. 추가 왕복은 드문 실패 경로에서만 생긴다.
+      //
+      // 가리지 못하는 경우 하나 — 정책이 하나도 없는 DB 라면 이 조회도 0행이라 (a) 로
+      // 잘못 본다. 다만 그런 DB 에서는 trips_select 도 없어 trip/[id]/page.tsx 의 여행
+      // 조회부터 비어 notFound 로 끝나므로, 이 버튼이 있는 화면 자체에 닿을 수 없다.
+      if (!data || data.length === 0) {
+        const { data: remaining, error: recheckError } = await supabase
+          .from('trip_members')
+          .select('user_id')
+          .eq('trip_id', tripId)
+          .eq('user_id', userId)
+          .maybeSingle()
+
+        // 조회가 실패하면 나갔는지 알 수 없으므로 실패로 본다 (fail-closed)
+        if (recheckError || remaining) {
+          failLeave()
+          return
+        }
+      }
+
       // 성공하면 leaving 을 되돌리지 않는다. 이 화면은 곧 사라지므로,
       // 이동이 끝나기 전에 버튼이 다시 눌리는 일만 막으면 된다.
+      // '/' 는 쿠키로 인증하는 dynamic 라우트라 staleTimes.dynamic 기본값 0 에서
+      // 이동할 때마다 서버에서 다시 가져온다. router.refresh() 는 같은 것을 한 번 더
+      // 가져오는 낭비라 부르지 않는다.
       router.replace('/')
-      router.refresh()
     } catch {
       failLeave()
     }
@@ -983,6 +1021,9 @@ function HeaderMenu({
   function failLeave() {
     setLeaving(false)
     setOpen(false) // 메뉴는 닫고 안내는 화면 하단에 띄운다
+    // 메뉴가 사라지면 지금 포커스가 있는 '나가기' 버튼도 함께 언마운트되어
+    // 키보드/스크린리더 포커스가 <body> 로 떨어진다. Escape 처리와 같게 트리거로 되돌린다.
+    triggerRef.current?.focus()
     onError(t('leaveTripFailed'))
   }
 
