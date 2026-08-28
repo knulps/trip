@@ -116,6 +116,7 @@
       "leaveTripFailed": "여행에서 나가지 못했습니다. 잠시 후 다시 시도해 주세요.",
       "rotateInviteConfirm": "지금까지 공유한 초대 링크가 모두 무효가 됩니다. 새 링크를 만들까요?",
       "rotateInviteFailed": "초대 링크를 새로 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "rotateInviteCopied": "새 초대 링크를 만들어 복사했습니다.",
       "rotateInviteCopyManually": "새 초대 링크를 만들었습니다. 아래 주소를 복사해 공유해 주세요.",
       "accessLost": "이 여행에 더 이상 접근할 수 없습니다."
     },

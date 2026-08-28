@@ -116,6 +116,7 @@
       "leaveTripFailed": "Couldn't leave the trip. Please try again in a moment.",
       "rotateInviteConfirm": "All previously shared invite links will stop working. Create a new link?",
       "rotateInviteFailed": "Couldn't reset the invite link. Please try again in a moment.",
+      "rotateInviteCopied": "New invite link created and copied.",
       "rotateInviteCopyManually": "New invite link created. Copy the address below to share it.",
       "accessLost": "You no longer have access to this trip."
     },
