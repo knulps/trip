@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect, useCallback, useRef, useTransition } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { APIProvider, Map, AdvancedMarker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps'
 import type { Trip, Day, Place } from '@/types/supabase'
 import { createClient } from '@/lib/supabase/client'
@@ -1030,8 +1030,11 @@ function HeaderMenu({
   userId: string
   // 여행을 만든 사람인가. 초대 링크 새로 만들기는 이 사람만, 나가기는 이 사람만 빼고 보인다.
   isOwner: boolean
-  // null 을 넘기면 배너를 지운다 (동작을 시작할 때 지난 실패 문구를 걷어 내는 용도)
-  onError: (message: string | null) => void
+  // 나가기 실패 문구를 날짜 탭 아래 공용 배너에 올린다. 지우지는 않으므로 null 을 받지
+  // 않는다 — 그 배너에는 접근 상실 안내도 함께 실리는데, 접근을 잃으면 Realtime 이벤트가
+  // RLS 에 걸러져 다시 판정할 계기가 오지 않아 한 번 지우면 영영 돌아오지 않는다.
+  // 초대 링크 관련 결과는 아래 onInviteNotice 전용 자리로 나가므로 지울 이유도 없다.
+  onError: (message: string) => void
   // 초대 링크 복사·새로 만들기의 결과를 본체의 공용 안내 자리에 올린다. null 을 넘기면 지운다.
   // 메뉴 밖에 두는 이유는 위 InviteNotice 정의에 적어 두었다.
   onInviteNotice: (notice: InviteNotice | null) => void
@@ -1049,15 +1052,21 @@ function HeaderMenu({
   // 링크를 새로 만든 직후의 토큰. 새로 만든 사람은 곧바로 새 링크를 공유해야 하므로,
   // 이 값이 있으면 prop 보다 먼저 쓴다.
   //
-  // prop 이 바뀌면 이 값을 버리는 effect 는 두지 않는다. 그 effect 는 '서버가 준 값이 언제나
-  // 최신' 이라는 전제 위에 서는데, 그 전제가 성립하지 않는다 — 이 화면은 서버 렌더 시점의
-  // trip 을 계속 들고 있고 회전 뒤 router.refresh() 도 부르지 않으므로, prop 이 바뀔 계기가
-  // 없다. 어쩌다 바뀌더라도 그 값이 방금 만든 토큰보다 새롭다는 보장이 없어, 버리는 쪽이
-  // 오히려 낡은 값을 되살린다.
+  // prop 이 바뀌면 이 값을 버리는 effect 는 두지 않는다. prop 이 바뀔 계기가 없어서가
+  // 아니다 — 실제로 있다. 같은 메뉴의 언어 전환이 router.refresh() 를 부르고
+  // trip/[id]/page.tsx 가 trips 를 다시 읽어 오므로, 언어를 바꿀 때마다 새 값이 내려온다.
+  //
+  // 두지 않는 이유는 그 effect 가 원리상 무용하기 때문이다. 버리려면 '서버가 준 값이 언제나
+  // 더 새롭다' 가 성립해야 하는데 그렇지 않다 — 우리 update 가 반영되기 전에 읽힌 응답이면
+  // 옛 토큰이 그대로 오고, 그 값으로 방금 만든 토큰을 덮으면 이미 무효가 된 링크를 되살려
+  // 내주게 된다.
+  //
+  // 두 값이 갈린 채로 두면 이 화면은 자기가 만든 토큰을 계속 내주는데, 그 결과는 이미
+  // 받아들인 트레이드오프 안에 있다 — 오래 띄워 둔 화면은 죽은 링크를 내줄 수 있다
+  // (위 inviteToken prop 설명 참고).
   const [rotatedToken, setRotatedToken] = useState<string | null>(null)
   const [leaving, setLeaving] = useState(false)
   const [rotating, setRotating] = useState(false)
-  const [isPending, startTransition] = useTransition()
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   // 지금 메뉴가 열려 있는가. 왕복(나가기·새로 만들기)이 끝난 뒤에 부르는 자리들이 이 값으로
@@ -1139,9 +1148,22 @@ function HeaderMenu({
     [nextLocale]
   )
 
+  // 메뉴를 닫는 일을 router.refresh() 와 한 묶음에 넣지 않는다. transition 안에 두면
+  // refresh 가 서버 왕복 동안 그 묶음을 붙잡아 setOpen(false) 가 커밋되지 않는데,
+  // setMenuOpen 은 menuOpenRef 를 동기로 바꾼다. 그동안 화면에는 메뉴가 그대로 떠 있는데
+  // ref 만 닫힌 것으로 보여, 그 값으로 가르는 자리들이 전부 반대로 움직인다 — 그 사이에
+  // 복사를 누르면 클립보드에는 들어가는데 '복사됨' 표시도 안 뜨고(copyLink 의 menuOpenRef
+  // 가드), 새로 만들기가 끝나며 부르는 closeMenu 는 되돌릴 포커스가 없다고 보아 포커스를
+  // <body> 로 떨어뜨린다.
+  //
+  // refresh 를 따로 transition 으로 감싸지도 않는다. router.refresh() 는 안에서 이미
+  // startTransition 으로 감싸 dispatch 하므로, 밖에서 한 번 더 감싸 봐야 얻는 것은
+  // isPending 뿐이다. 여기서는 그 값을 쓸 자리가 없다 — 언어 버튼은 메뉴 안에 있고
+  // 메뉴는 바로 위에서 이미 닫혔다.
   function toggleLocale() {
     setLocaleCookie(nextLocale)
-    startTransition(() => { router.refresh(); setMenuOpen(false) })
+    setMenuOpen(false)
+    router.refresh()
   }
 
   // 메뉴를 닫고 포커스를 ⋮ 트리거로 되돌린다. 메뉴가 사라지면 그 안에서 포커스를 쥐고 있던
@@ -1176,8 +1198,10 @@ function HeaderMenu({
   // afterRotate — 새로 만든 직후의 자동 복사인가. 복사가 실패했을 때 오류로 보일지
   // 안내로 보일지가 이 값으로 갈린다 (새로 만들기 자체는 이미 성공한 뒤라 오류가 아니다).
   function copyLink(token: string, afterRotate: boolean) {
-    // 지난 실패 문구를 걷어 낸다 (deleteDay 와 AddDayButton.addDay 도 같은 자리에서 지운다)
-    onError(null)
+    // 지난 복사·새로 만들기 결과를 걷어 낸다. 이 자리에서 지우는 것은 초대 전용 안내뿐이고,
+    // 위쪽 actionError 배너는 건드리지 않는다 — 그 배너에는 접근 상실 안내가 함께 실리는데
+    // 한 번 지우면 다시 뜰 계기가 없다 (onError prop 설명 참고). 복사는 성공해도 그 자리에
+    // 아무것도 세우지 않으므로, 지우면 경고만 조용히 사라진다.
     onInviteNotice(null)
 
     const url = `${window.location.origin}/invite/${token}`
@@ -1353,13 +1377,14 @@ function HeaderMenu({
     // 가드는 막으려는 상태를 세우는 자리에 붙여 두어야 읽을 때 짝이 보인다.
     if (rotating) return
     setRotating(true)
-    // 시작할 때 지난 배너를 지운다. 그러지 않으면 한 번 실패해 뜬 '새로 만들지 못했습니다'가
+    // 시작할 때 지난 안내를 지운다. 그러지 않으면 한 번 실패해 뜬 '새로 만들지 못했습니다'가
     // 재시도해 성공한 뒤에도 그대로 남아, 옛 링크가 아직 살아 있다고 믿게 만든다. 옛 링크를
     // 끊는 것이 이 기능의 존재 이유라 화면에 남은 신호가 사실과 반대인 것은 그냥 둘 수 없다.
-    // (deleteDay 와 AddDayButton.addDay 도 같은 자리에서 지운다)
-    onError(null)
-    // 지난 복사 결과 안내도 함께 걷는다. 남겨 두면 이번 시도가 실패했을 때 지난 성공 안내가
-    // 실패 문구와 나란히 남아, 방금 일어난 일이 어느 쪽인지 읽어 낼 수 없다.
+    // 지난 복사 결과도 같은 자리라 함께 걷힌다 — 남겨 두면 이번 시도가 실패했을 때 지난 성공
+    // 안내가 실패 문구와 나란히 남아, 방금 일어난 일이 어느 쪽인지 읽어 낼 수 없다.
+    //
+    // 위쪽 actionError 배너는 건드리지 않는다. 실패도 이제 이 전용 안내로 나가므로 지울
+    // 이유가 없고, 지우면 그 자리의 접근 상실 안내까지 함께 사라진다 (copyLink 와 같다).
     onInviteNotice(null)
     try {
       // secure context 가 아니면 crypto.randomUUID 가 없다 (copyLink 가 clipboard 부재를
@@ -1408,8 +1433,9 @@ function HeaderMenu({
       // 여기서 router.refresh() 를 부르지 않는다. 화면에서 달라지는 것이 하나도 없기
       // 때문이다 — 방금 만든 토큰은 위 setRotatedToken 이 이미 들고 있고, 그 값이 prop 보다
       // 먼저 쓰인다. 서버를 다시 그려 봐야 새 trip 을 한 번 더 받아 오는 왕복만 늘어난다.
-      // (그 결과로 inviteToken prop 이 갱신될 일도 없어진다. rotatedToken 을 prop 변화로
-      //  버리는 effect 를 두지 않은 이유이기도 하다 — 그 선언 자리에 적어 두었다)
+      // (그렇다고 inviteToken prop 이 영영 그대로인 것은 아니다 — 언어 전환이 부르는
+      //  router.refresh() 로 갱신된다. 그래도 rotatedToken 을 버리지 않는 이유는 그 선언
+      //  자리에 적어 두었다)
     } catch {
       failRotate()
     } finally {
@@ -1477,12 +1503,13 @@ function HeaderMenu({
           )}
           <button
             onClick={toggleLocale}
-            disabled={isPending}
-            aria-busy={isPending}
+            /* 여기에는 진행 중 표시(disabled·aria-busy)를 달지 않는다. 누르는 즉시 메뉴가
+               닫혀 이 버튼이 사라지므로 표시가 보일 자리가 없다 (toggleLocale 참고). */
             /* 보이는 글자(언어 이름)를 접근성 이름 안에 그대로 품게 해 음성 입력으로도 누를 수 있게 한다 */
             aria-label={`${tNav('switchLanguage')} (${nextLocaleName})`}
             role="menuitem"
-            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50"
+            /* disabled 가 될 일이 없어 disabled:opacity-50 도 두지 않는다 (위 주석 참고) */
+            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100"
           >
             {`🌐 ${nextLocaleName}`}
           </button>
