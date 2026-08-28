@@ -977,6 +977,11 @@ function HeaderMenu({
   // 메뉴를 연 시점에 서버에서 읽어 둔 초대 토큰. 아직 못 읽었거나 읽지 못했으면 null 이고,
   // 그동안 '초대 링크 복사'는 눌리지 않는다 — 죽은 링크를 공유하느니 복사가 안 되는 편이 낫다.
   const [inviteToken, setInviteToken] = useState<string | null>(null)
+  // 그 조회가 실패했는가. 화면 아래 공용 배너가 아니라 이 메뉴 안에 띄운다 — 조회는 메뉴가
+  // 열려 있는 동안에만 뜻이 있는 값이라 안내도 그 수명에 묶어 두는 것이 맞다. 공용 배너로
+  // 올리면 메뉴를 닫아도 안내가 남고, 그 뒤에 뜬 다른 안내(새로 만들기 실패, 날짜 삭제 실패,
+  // 접근 상실)를 이 조회가 다시 성공했다는 이유로 걷어내게 된다.
+  const [loadFailed, setLoadFailed] = useState(false)
   // 복사에 실패해 주소를 직접 노출할 때 쓰는 값. 새로 만든 직후의 자동 복사였는지
   // (afterRotate)를 함께 담는다 — 그때는 링크를 새로 만드는 데 이미 성공한 뒤라
   // 복사가 안 된 것을 오류가 아니라 안내로 보여야 한다.
@@ -986,8 +991,20 @@ function HeaderMenu({
   const [isPending, startTransition] = useTransition()
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  // 초대 링크 조회가 실패해 배너를 띄웠는지. 다음 조회가 성공하면 그 배너만 골라 지운다.
-  const loadFailedRef = useRef(false)
+  // 초대 토큰 조회에 나눠 주는 순번. 결과를 화면에 반영하기 직전에 그 순번이 아직 최신인지
+  // 견줘 본다 (본체 refreshDays 의 refreshTokenRef / lastAppliedRef 와 같은 장치이고,
+  // 여기는 반영 경로가 하나뿐이라 발급과 판정을 한 ref 로 겸한다).
+  // 취소해야 할 계기가 둘이다 — 메뉴를 닫는 것과, 초대 링크를 새로 만드는 것.
+  // 뒤엣것은 메뉴가 열린 채로 일어나 '아직 열려 있는가' 만으로는 가려낼 수 없다. 그대로 두면
+  // 조회가 끝나기 전에 새로 만들었을 때 뒤늦게 끝난 조회가 방금 만든 토큰 위에 회전 전 토큰을
+  // 덮어써, 이어서 누른 '초대 링크 복사'가 이미 무효인 링크를 복사해 내준다.
+  const loadSeqRef = useRef(0)
+  // 진행 중인 조회를 모두 무효로 만든다. 부르는 곳이 둘이다 — 메뉴를 닫을 때(아래 effect 의
+  // teardown)와 링크를 새로 만들었을 때(rotateInvite). 순번을 올리기만 하면 되지만, 하는 일에
+  // 이름을 붙여 두 자리에서 같은 뜻으로 읽히게 한다.
+  const invalidateInviteLoads = useCallback(() => {
+    loadSeqRef.current++
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -1026,8 +1043,8 @@ function HeaderMenu({
   // 이 조회는 trips_select 정책을 타므로 멤버와 만든 사람은 그대로 통과한다.
   useEffect(() => {
     if (!open) return
-    // 조회가 끝나기 전에 메뉴가 닫히면 결과를 버린다 (닫은 뒤 배너가 뒤늦게 뜨지 않도록)
-    let alive = true
+    // 이 조회의 순번을 발급받는다. 결과를 쓰기 직전에 이 값이 아직 최신인지 본다.
+    const seq = ++loadSeqRef.current
     void (async () => {
       try {
         const { data, error } = await supabase
@@ -1035,31 +1052,33 @@ function HeaderMenu({
           .select('invite_token')
           .eq('id', tripId)
           .single()
-        if (!alive) return
+        // 순번이 이미 밀렸으면 아무것도 쓰지 않는다. 메뉴가 닫혔거나(닫은 뒤 안내가 뒤늦게
+        // 뜨는 것을 막는다) 그 사이에 링크를 새로 만들었다는(방금 만든 토큰이 회전 전 값으로
+        // 덮이는 것을 막는다) 뜻이고, 어느 쪽이든 이 결과는 이미 낡았다.
+        if (seq !== loadSeqRef.current) return
         if (error || !data) throw new Error('invite token unavailable')
-        // 앞서 이 조회가 띄운 실패 배너가 있으면 지운다. 이제 복사 버튼이 살아나는데
-        // '가져오지 못했습니다' 가 남아 있으면 아직 안 되는 상태로 읽힌다.
-        // 내가 띄운 것일 때만 지운다 — 날짜 삭제 실패 같은 남의 안내까지 걷어내면 안 된다.
-        if (loadFailedRef.current) {
-          loadFailedRef.current = false
-          onError(null)
-        }
+        setLoadFailed(false)
         setInviteToken(data.invite_token)
       } catch {
         // 조회가 던지는 경우까지 같은 자리에서 받는다. 예외가 새어 나가면 복사 버튼만
         // 이유 없이 눌리지 않는 상태로 남아, 사용자는 아무 안내도 받지 못한다.
-        if (!alive) return
-        loadFailedRef.current = true
-        onError(t('loadInviteLinkFailed'))
+        if (seq !== loadSeqRef.current) return
+        setLoadFailed(true)
       }
     })()
     return () => {
-      alive = false
+      // 아직 돌아오지 않은 조회를 무효로 만든다
+      invalidateInviteLoads()
       // 메뉴를 닫을 때 비워 다음에 열 때 반드시 새로 읽게 한다. 남겨 두면 한 번 열었던
       // 화면이 그때의 토큰을 계속 내주게 되어, 조회를 메뉴 열기로 옮긴 뜻이 없어진다.
       setInviteToken(null)
+      setLoadFailed(false)
     }
-  }, [open, supabase, tripId, onError, t])
+  }, [open, supabase, tripId, invalidateInviteLoads])
+
+  // 토큰을 아직 읽는 중인가. 읽지 못한 것과 가른다 — 그쪽은 더 이상 진행 중이 아니고,
+  // 복사 버튼 아래 안내가 이유를 알린다.
+  const loadingInvite = open && !inviteToken && !loadFailed
 
   // 다음 로케일은 공유 목록에서 순환시켜 구한다 (LocaleSwitcher 와 같은 규칙)
   const current: Locale = isLocale(locale) ? locale : defaultLocale
@@ -1273,6 +1292,15 @@ function HeaderMenu({
 
       // 메뉴가 열린 채로 이어서 '초대 링크 복사'를 누를 수 있으므로 들고 있던 토큰도
       // 방금 만든 값으로 바꿔 둔다. 그러지 않으면 이 메뉴를 닫을 때까지 옛 토큰을 내준다.
+      //
+      // 세우기 전에 순번을 올려, 메뉴를 열 때 시작해 아직 돌아오지 않은 조회를 모두 무효로
+      // 만든다. 그러지 않으면 그 조회가 회전 전 토큰을 들고 뒤늦게 돌아와 여기서 세운 새
+      // 토큰을 덮고, 이어서 누른 '초대 링크 복사'가 방금 무효로 만든 링크를 복사해 내준다 —
+      // 이 기능이 막으려던 바로 그 일이다. iOS 에서는 아래 자동 복사가 제스처 밖이라 거의
+      // 매번 실패해 메뉴가 열린 채 남으므로, 사용자가 이어서 복사를 누르는 것이 오히려
+      // 자연스러운 경로다.
+      invalidateInviteLoads()
+      setLoadFailed(false)
       setInviteToken(newToken)
 
       // 링크를 무효로 만든 사람은 곧바로 새 링크를 공유해야 하므로 자동으로 복사해 준다.
@@ -1281,7 +1309,15 @@ function HeaderMenu({
       // copyLink 가 주소를 노출해 직접 복사하게 한다(오류가 아니라 안내로). 새로 만들기는
       // 드문 동작이라 이 처리로 충분하다.
       copyLink(newToken, true)
-      router.refresh()
+
+      // 여기서 router.refresh() 를 부르지 않는다. 클라이언트에서 trips.invite_token 을 읽는
+      // 곳이 하나도 없어(이 메뉴가 필요할 때 직접 조회한다) 서버를 다시 그려도 화면에서
+      // 달라지는 것이 없다. 오히려 해롭다 — layout 의 messages 가 매 요청 새 객체로
+      // 직렬화되어 t 가 새로 만들어지고, 그것을 deps 로 쓰는 effect 가 teardown 된다.
+      // 그러면 방금 세운 토큰이 null 로 지워진 뒤 조회가 한 번 더 돌아 복사 버튼이 깜빡이고,
+      // 그 재조회가 실패하면 성공한 새로 만들기 위에 실패 안내가 뜬다.
+      // (위 조회 effect 의 deps 에서는 t 를 걷어냈지만, 부를 이유가 없는 호출을 남겨 두면
+      //  같은 결합이 언제든 되살아난다)
     } catch {
       failRotate()
     } finally {
@@ -1322,13 +1358,25 @@ function HeaderMenu({
           <button
             onClick={copyInviteLink}
             /* 토큰을 읽어 오기 전이거나 읽지 못했으면 누르지 못한다 (fail-closed).
-               읽지 못한 경우는 위 effect 가 배너로 알린다. */
+               읽지 못한 경우는 바로 아래 안내가 이유를 알린다. */
             disabled={!inviteToken}
+            /* 메뉴를 열면 조회 왕복 한 번만큼은 반드시 비활성이라, 그 사이에는 진행 중임을
+               알린다 (같은 메뉴의 새로 만들기·언어 전환·나가기와 같은 방식이다).
+               읽지 못해 잠긴 것은 진행 중이 아니므로 아래 안내가 대신 맡는다. */
+            aria-busy={loadingInvite}
             role="menuitem"
             className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50"
           >
             {copied ? tCommon('copied') : tNav('copyInviteLink')}
           </button>
+          {/* 조회 실패는 화면 아래 공용 배너가 아니라 여기에 띄운다. 복사 버튼이 왜 잠겨
+              있는지는 그 버튼 옆에서 읽혀야 하고, 메뉴를 닫으면 함께 사라지는 것이 맞다.
+              (모양은 아래 manualCopy 안내에 맞춘다) */}
+          {loadFailed && (
+            <p role="alert" className="px-4 pb-2 text-[10px] leading-snug text-red-500">
+              {t('loadInviteLinkFailed')}
+            </p>
+          )}
           {manualCopy && (
             <div className="px-4 pb-2">
               {/* 새로 만든 직후의 자동 복사 실패는 오류가 아니다 — 링크는 이미 새로 만들어졌고,
