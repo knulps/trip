@@ -19,7 +19,10 @@ export const INVITE_TOKEN_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // 쿼리와 쿠키에서 읽은 값은 전부 신뢰할 수 없으므로 이 helper로 걸러 쓴다
-export function isInviteToken(value: string | null | undefined): value is string {
+// export 하지 않는다. 값을 받는 자리에서 이 쪽을 집으면 정규화를 건너뛰게 되고,
+// 그것이 바로 아래 normalizeInviteToken 이 막으려는 실패 모양이다. 규칙을 주석이 아니라
+// 구조로 강제하려면 밖에서는 normalizeInviteToken 하나만 보여야 한다.
+function isInviteToken(value: string | null | undefined): value is string {
   return typeof value === 'string' && INVITE_TOKEN_PATTERN.test(value)
 }
 

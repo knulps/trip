@@ -1162,7 +1162,9 @@ function HeaderMenu({
   // 메뉴는 바로 위에서 이미 닫혔다.
   function toggleLocale() {
     setLocaleCookie(nextLocale)
-    setMenuOpen(false)
+    // 닫는 쪽이 포커스를 책임진다 — 여기서 setMenuOpen 을 직접 부르면 키보드로 이 항목을
+    // 고른 사용자의 포커스가 <body> 로 떨어진다. 화면이 바뀌지 않으므로 되돌려 줘야 한다.
+    closeMenu()
     router.refresh()
   }
 
