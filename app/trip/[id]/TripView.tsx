@@ -1006,14 +1006,25 @@ function HeaderMenu({
     loadSeqRef.current++
   }, [])
 
+  // 초대 링크를 새로 만드는 동안에는 바깥 탭도 Escape 도 메뉴를 닫지 않는다.
+  // 지금까지 뿌린 링크를 한 번에 끊는 동작인데 그 결과를 보여줄 자리가 이 메뉴 안뿐이라
+  // 그렇다 — 성공하면 rotateInvite 가 곧바로 copyLink 를 부르고, 그 첫 줄의 onError(null)
+  // 이 공용 배너까지 지운다. iOS 는 이 시점의 clipboard 쓰기를 거부해 대신 manualCopy 안내와
+  // 새 주소가 뜨는데 그것도 메뉴 안이라, 닫힌 채로 성공하면 '방금 링크가 끊겼다'는 사실도
+  // 새 주소도 화면에 하나도 남지 않는다. 메뉴를 다시 열면 새 토큰으로 복사할 수 있어
+  // 복구는 되지만, 끊긴 것을 알릴 수 있는 유일한 순간을 이미 지난 뒤다.
+  // 닫히지 않는 구간은 update 왕복 한 번만큼이다.
+  // (핸들러가 낡은 rotating 을 보지 않도록 deps 에 함께 넣는다)
   useEffect(() => {
     if (!open) return
     // pointerdown이면 마우스/터치/펜을 모두 덮음
     function handlePointerDown(e: PointerEvent) {
+      if (rotating) return
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key !== 'Escape') return
+      if (rotating) return
       setOpen(false)
       triggerRef.current?.focus()
     }
@@ -1023,7 +1034,7 @@ function HeaderMenu({
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [open])
+  }, [open, rotating])
 
   // 메뉴를 열 때 지금 초대 토큰을 서버에서 미리 읽어 둔다.
   //
@@ -1260,8 +1271,8 @@ function HeaderMenu({
     // (deleteDay 와 AddDayButton.addDay 도 같은 자리에서 지운다)
     onError(null)
     try {
-      // secure context 가 아니면 crypto.randomUUID 가 없다 (copyInviteLink 가 clipboard
-      // 부재를 다루는 것과 같은 상황이다). 없다고 다른 난수로 대신 만들면 추측할 수 있는
+      // secure context 가 아니면 crypto.randomUUID 가 없다 (copyLink 가 clipboard 부재를
+      // 다루는 것과 같은 상황이다). 없다고 다른 난수로 대신 만들면 추측할 수 있는
       // 값이 초대 링크가 되므로, 만들지 못하면 그대로 실패로 알린다.
       if (!crypto?.randomUUID) throw new Error('randomUUID unavailable')
       const newToken = crypto.randomUUID()
@@ -1327,9 +1338,13 @@ function HeaderMenu({
   }
 
   function failRotate() {
+    // 메뉴가 사라지면서 포커스가 <body> 로 떨어지지 않도록 트리거로 되돌리되, 닫기 직전에
+    // 포커스가 메뉴 안에 있었을 때만 그렇게 한다 (copyLink 의 복사 성공 처리와 같은 가드다).
+    // 새로 만드는 동안에는 메뉴가 닫히지 않으므로(위 effect) 여기서 '메뉴 밖'은 사용자가
+    // 스스로 포커스를 옮겼다는 뜻뿐이고, 그 포커스를 빼앗는 쪽이 더 나쁘다.
+    const focusWasInMenu = ref.current?.contains(document.activeElement) ?? false
     setOpen(false) // 메뉴는 닫고 안내는 날짜 탭 아래 배너에 띄운다 (failLeave 와 같다)
-    // 메뉴가 사라지면서 포커스가 <body> 로 떨어지지 않도록 트리거로 되돌린다.
-    triggerRef.current?.focus()
+    if (focusWasInMenu) triggerRef.current?.focus()
     onError(t('rotateInviteFailed'))
   }
 
@@ -1337,7 +1352,11 @@ function HeaderMenu({
     <div ref={ref} className="relative shrink-0">
       <button
         ref={triggerRef}
-        onClick={() => { setManualCopy(null); setOpen(v => !v) }}
+        /* 새로 만드는 중이면 이 버튼으로도 닫지 않는다. 위 effect 가 바깥 탭·Escape 를 막는
+           것과 이유가 같고(결과를 보여줄 자리가 메뉴 안뿐이다), 여기로 닫아도 결과는 똑같이
+           아무 신호도 남지 않는다. rotating 은 메뉴가 열려 있을 때만 참이 되므로
+           이 가드가 메뉴를 여는 것을 막지는 않는다. */
+        onClick={() => { if (rotating) return; setManualCopy(null); setOpen(v => !v) }}
         className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 active:bg-gray-200 text-lg leading-none"
         aria-label={tNav('moreMenu')}
         aria-haspopup="menu"
@@ -1358,12 +1377,15 @@ function HeaderMenu({
           <button
             onClick={copyInviteLink}
             /* 토큰을 읽어 오기 전이거나 읽지 못했으면 누르지 못한다 (fail-closed).
-               읽지 못한 경우는 바로 아래 안내가 이유를 알린다. */
-            disabled={!inviteToken}
-            /* 메뉴를 열면 조회 왕복 한 번만큼은 반드시 비활성이라, 그 사이에는 진행 중임을
-               알린다 (같은 메뉴의 새로 만들기·언어 전환·나가기와 같은 방식이다).
-               읽지 못해 잠긴 것은 진행 중이 아니므로 아래 안내가 대신 맡는다. */
-            aria-busy={loadingInvite}
+               읽지 못한 경우는 바로 아래 안내가 이유를 알린다.
+               새로 만드는 중에도 잠근다 — update 응답이 오기 전까지 inviteToken 은 아직
+               회전 전 값이라, 그 사이에 복사하면 곧 무효가 될 링크를 내주게 된다. */
+            disabled={!inviteToken || rotating}
+            /* 잠긴 이유가 '진행 중'일 때만 그렇게 알린다 (같은 메뉴의 새로 만들기·언어 전환·
+               나가기와 같은 방식이다). 메뉴를 열면 조회 왕복 한 번만큼은 반드시 비활성이고,
+               새로 만드는 왕복도 마찬가지다. 읽지 못해 잠긴 것은 진행 중이 아니므로
+               아래 안내가 대신 맡는다. */
+            aria-busy={loadingInvite || rotating}
             role="menuitem"
             className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50"
           >
@@ -1411,8 +1433,12 @@ function HeaderMenu({
           )}
           <button
             onClick={toggleLocale}
-            disabled={isPending}
-            aria-busy={isPending}
+            /* 새로 만드는 중에는 이것도 잠근다. 이 버튼은 setOpen(false) 로 메뉴를 닫으면서도
+               화면은 그대로 두어(router.refresh) 바깥 탭·Escape·⋮ 와 똑같이 결과를 보여줄
+               자리만 없애기 때문이다. 화면 자체를 떠나는 경로(위 '가져오기' 링크)는 막지
+               않는다 — 그쪽은 사용자가 이 화면을 떠나기로 한 것이라 뜻이 다르다. */
+            disabled={isPending || rotating}
+            aria-busy={isPending || rotating}
             /* 보이는 글자(언어 이름)를 접근성 이름 안에 그대로 품게 해 음성 입력으로도 누를 수 있게 한다 */
             aria-label={`${tNav('switchLanguage')} (${nextLocaleName})`}
             role="menuitem"
