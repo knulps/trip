@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   INVITE_TOKEN_COOKIE,
   INVITE_TOKEN_MAX_AGE,
-  isInviteToken,
+  normalizeInviteToken,
 } from '@/lib/invite'
 
 // Postgres unique_violation — 두 탭에서 동시에 수락한 경우
@@ -22,10 +22,16 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
-  const { token } = await params
+  const { token: rawToken } = await params
   const origin = new URL(request.url).origin
 
-  if (!isInviteToken(token)) {
+  // 주소에 적힌 대소문자를 그대로 들고 가지 않고 여기서 한 번 맞춘다. 아래 수락 후 토큰
+  // 재확인이 조회 결과와 문자열로 견주는데 Postgres 는 uuid 를 언제나 소문자로 돌려주므로,
+  // 대문자로 적힌 링크는 여행을 정상적으로 찾아 가입까지 해 놓고 그 재확인에서만 다르다고
+  // 판정돼 방금 만든 멤버십이 되돌려진다 (자세한 이유는 lib/invite.ts 에 적어 두었다).
+  // 여기서 맞춰 두면 쿠키와 /login?invite= 로 흘려보내는 값까지 같은 모양이 된다.
+  const token = normalizeInviteToken(rawToken)
+  if (!token) {
     return redirectClearingInvite(`${origin}/?error=invalid_invite`)
   }
 

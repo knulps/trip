@@ -69,7 +69,11 @@ interface InviteNotice {
   // 지워지지 않으므로, 화면이 통째로 새 언어가 되는데 이 한 줄만 옛 언어로 남는다.
   // (주소가 있으면 그 옆 aria-label 은 새 언어라 한 안내 안에서 언어가 섞인다)
   // 키로 들고 그릴 때마다 t() 로 옮기면 그 순간의 언어를 따라간다.
-  messageKey: 'rotateInviteCopied' | 'rotateInviteCopyManually' | 'copyLinkFailed'
+  messageKey:
+    | 'rotateInviteCopied'
+    | 'rotateInviteCopyManually'
+    | 'copyLinkFailed'
+    | 'rotateInviteFailed'
   // 복사하지 못해 직접 복사하도록 노출하는 주소. 복사에 성공했으면 null
   url: string | null
   // 오류인가. 새로 만들기가 성공한 뒤라면 복사가 안 됐어도 오류가 아니다
@@ -112,6 +116,10 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
   const [locating, setLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [deletingDayId, setDeletingDayId] = useState<string | null>(null)
+  // 날짜 추가·삭제, 나가기, 접근 상실의 실패 문구. 여기에는 이미 옮겨진 문구가 그대로 담긴다.
+  // 바로 아래 inviteNotice 는 키를 담아 그릴 때마다 옮긴다 — 두 방식이 나란히 있는 경계다.
+  // 초대 쪽만 키인 이유: 그 안내는 언어 전환에도 화면에 남아, 문구를 담아 두면 화면이 통째로
+  // 새 언어가 되는데 그 한 줄만 옛 언어로 남는다 (위 InviteNotice 정의 참고).
   const [actionError, setActionError] = useState<string | null>(null)
   const [inviteNotice, setInviteNotice] = useState<InviteNotice | null>(null)
 
@@ -641,6 +649,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
             'isOwner' 하나로 넘긴다. */}
         <HeaderMenu
           tripId={trip.id}
+          inviteToken={trip.invite_token}
           userId={userId}
           isOwner={trip.created_by === userId}
           onError={setActionError}
@@ -698,7 +707,8 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
         </div>
       </div>
 
-      {/* 날짜 추가/삭제 실패, 여행 나가기 실패, 초대 링크 새로 만들기 실패, 접근 상실 안내 */}
+      {/* 날짜 추가/삭제 실패, 여행 나가기 실패, 접근 상실 안내
+          (초대 링크 관련 결과는 실패까지 모두 아래 inviteNotice 자리에 뜬다) */}
       {actionError && (
         <div className="flex items-start gap-2 px-4 pb-2">
           <p role="alert" className="flex-1 text-xs text-red-600">{actionError}</p>
@@ -1004,6 +1014,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
 // 헤더 더보기 메뉴 (가져오기 + 초대 + 나가기)
 function HeaderMenu({
   tripId,
+  inviteToken,
   userId,
   isOwner,
   onError,
@@ -1011,6 +1022,11 @@ function HeaderMenu({
   onLeaving,
 }: {
   tripId: string
+  // 이 화면을 그릴 때의 초대 토큰. 서버에서 다시 읽지 않는다 — 그 조회를 넣었더니 회전·메뉴
+  // 생명주기·포커스·타이머와 얽혀 경합이 끝없이 나왔다. 대가는 받아들인다: 다른 멤버가 링크를
+  // 새로 만든 뒤에도 오래 띄워 둔 이 화면은 죽은 링크를 내주고, 그 링크를 받은 사람은
+  // /?error=invalid_invite 의 '초대 링크가 올바르지 않거나 만료되었습니다' 안내를 본다.
+  inviteToken: string
   userId: string
   // 여행을 만든 사람인가. 초대 링크 새로 만들기는 이 사람만, 나가기는 이 사람만 빼고 보인다.
   isOwner: boolean
@@ -1030,27 +1046,38 @@ function HeaderMenu({
   const supabase = createClient()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  // 메뉴를 연 시점에 서버에서 읽어 둔 초대 토큰. 아직 못 읽었거나 읽지 못했으면 null 이고,
-  // 그동안 '초대 링크 복사'는 눌리지 않는다 — 죽은 링크를 공유하느니 복사가 안 되는 편이 낫다.
-  const [inviteToken, setInviteToken] = useState<string | null>(null)
-  // 그 조회가 실패했는가. 화면 아래 공용 배너가 아니라 이 메뉴 안에 띄운다 — 조회는 메뉴가
-  // 열려 있는 동안에만 뜻이 있는 값이라 안내도 그 수명에 묶어 두는 것이 맞다. 공용 배너로
-  // 올리면 메뉴를 닫아도 안내가 남고, 그 뒤에 뜬 다른 안내(새로 만들기 실패, 날짜 삭제 실패,
-  // 접근 상실)를 이 조회가 다시 성공했다는 이유로 걷어내게 된다.
-  const [loadFailed, setLoadFailed] = useState(false)
+  // 링크를 새로 만든 직후의 토큰. 새로 만든 사람은 곧바로 새 링크를 공유해야 하므로,
+  // 이 값이 있으면 prop 보다 먼저 쓴다.
+  //
+  // prop 이 바뀌면 이 값을 버리는 effect 는 두지 않는다. 그 effect 는 '서버가 준 값이 언제나
+  // 최신' 이라는 전제 위에 서는데, 그 전제가 성립하지 않는다 — 이 화면은 서버 렌더 시점의
+  // trip 을 계속 들고 있고 회전 뒤 router.refresh() 도 부르지 않으므로, prop 이 바뀔 계기가
+  // 없다. 어쩌다 바뀌더라도 그 값이 방금 만든 토큰보다 새롭다는 보장이 없어, 버리는 쪽이
+  // 오히려 낡은 값을 되살린다.
+  const [rotatedToken, setRotatedToken] = useState<string | null>(null)
   const [leaving, setLeaving] = useState(false)
   const [rotating, setRotating] = useState(false)
   const [isPending, startTransition] = useTransition()
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  // 지금 메뉴가 열려 있는가. closeMenu 가 포커스를 트리거로 되돌릴지 가르는 데 쓴다.
-  // closeMenu 안에서 open 을 그냥 읽으면 그 함수를 만든 렌더의 값이 잡히는데, 왕복이 끝난
-  // 뒤에 부르는 경로(복사 결과, 나가기·새로 만들기 실패)에서는 그 값이 왕복을 시작할 때의
-  // true 라 늘 참이 된다. 그래서 최신 값을 ref 로 따로 들고 본다.
-  const openRef = useRef(false)
-  useEffect(() => {
-    openRef.current = open
-  }, [open])
+  // 지금 메뉴가 열려 있는가. 왕복(나가기·새로 만들기)이 끝난 뒤에 부르는 자리들이 이 값으로
+  // 포커스를 되돌릴지 가른다.
+  //
+  // 왜 state 가 아니라 ref 인가 — 그 자리에서 open 을 그냥 읽으면 함수를 만든 렌더의 값이
+  // 잡히는데, 메뉴 안 버튼은 open === true 인 렌더에서만 만들어지므로 그 값은 늘 true 다.
+  // 왕복을 시작할 때 open 을 지역 변수로 잡아 두는 방법도 같은 이유로 성립하지 않는다
+  // (시작 시점 값 역시 언제나 true 다). 우리가 알아야 하는 것은 '응답이 도착한 지금' 열려
+  // 있는가이므로, 최신 값을 따로 들고 본다.
+  //
+  // 왜 effect 로 맞추지 않는가 — effect 는 커밋 뒤에 돌아 한 틱 늦다. 바깥 클릭으로 닫은
+  // 직후 응답이 오면 아직 true 라, 사용자가 옮겨 간 자리에서 포커스를 빼앗는다.
+  // 그래서 setOpen 과 같은 자리에서 함께 움직이도록 아래 setMenuOpen 하나로만 여닫는다.
+  const menuOpenRef = useRef(false)
+  // 메뉴를 여닫는 유일한 통로. setOpen 을 직접 부르면 위 ref 가 어긋나므로 여기만 쓴다.
+  const setMenuOpen = useCallback((next: boolean) => {
+    menuOpenRef.current = next
+    setOpen(next)
+  }, [])
   // '복사됨' 표시를 1.5초 뒤 되돌리고 메뉴를 닫는 타이머. 보관해 두는 이유는 취소해야 하기
   // 때문이다 — 복사한 뒤 1.5초가 지나기 전에 메뉴를 닫았다 다시 열면, 남아 있던 타이머가
   // 방금 연 메뉴를 닫아 버린다.
@@ -1060,20 +1087,6 @@ function HeaderMenu({
     clearTimeout(copiedTimerRef.current)
     copiedTimerRef.current = null
   }, [])
-  // 초대 토큰 조회에 나눠 주는 순번. 결과를 화면에 반영하기 직전에 그 순번이 아직 최신인지
-  // 견줘 본다 (본체 refreshDays 의 refreshTokenRef / lastAppliedRef 와 같은 장치이고,
-  // 여기는 반영 경로가 하나뿐이라 발급과 판정을 한 ref 로 겸한다).
-  // 취소해야 할 계기가 둘이다 — 메뉴를 닫는 것과, 초대 링크를 새로 만드는 것.
-  // 뒤엣것은 메뉴가 열린 채로 일어나 '아직 열려 있는가' 만으로는 가려낼 수 없다. 그대로 두면
-  // 조회가 끝나기 전에 새로 만들었을 때 뒤늦게 끝난 조회가 방금 만든 토큰 위에 회전 전 토큰을
-  // 덮어써, 이어서 누른 '초대 링크 복사'가 이미 무효인 링크를 복사해 내준다.
-  const loadSeqRef = useRef(0)
-  // 진행 중인 조회를 모두 무효로 만든다. 부르는 곳이 둘이다 — 메뉴를 닫을 때(아래 effect 의
-  // teardown)와 링크를 새로 만들었을 때(rotateInvite). 순번을 올리기만 하면 되지만, 하는 일에
-  // 이름을 붙여 두 자리에서 같은 뜻으로 읽히게 한다.
-  const invalidateInviteLoads = useCallback(() => {
-    loadSeqRef.current++
-  }, [])
 
   // 초대 링크를 새로 만드는 중이어도 메뉴는 평소대로 닫힌다. 그 결과(성공 안내, 새 주소,
   // 실패)는 이제 메뉴 밖 공용 안내에 뜨므로, 결과를 남기려고 메뉴를 붙잡아 둘 이유가 없다.
@@ -1081,11 +1094,11 @@ function HeaderMenu({
     if (!open) return
     // pointerdown이면 마우스/터치/펜을 모두 덮음
     function handlePointerDown(e: PointerEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (ref.current && !ref.current.contains(e.target as Node)) setMenuOpen(false)
     }
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key !== 'Escape') return
-      setOpen(false)
+      setMenuOpen(false)
       triggerRef.current?.focus()
     }
     document.addEventListener('pointerdown', handlePointerDown)
@@ -1094,7 +1107,7 @@ function HeaderMenu({
       document.removeEventListener('pointerdown', handlePointerDown)
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [open])
+  }, [open, setMenuOpen])
 
   // 메뉴가 닫히면(언마운트 포함) 복사 타이머를 걷고 '복사됨' 표시도 되돌린다. 그 타이머가
   // 하는 일이 표시를 되돌리고 메뉴를 닫는 것뿐이라 이미 닫힌 뒤에는 남겨 둘 이유가 없고,
@@ -1110,60 +1123,9 @@ function HeaderMenu({
     }
   }, [open, clearCopiedTimer])
 
-  // 메뉴를 열 때 지금 초대 토큰을 서버에서 미리 읽어 둔다.
-  //
-  // 왜 서버에서 읽는가 — 화면이 들고 있는 값은 얼마든지 낡을 수 있다. trips 는 Realtime
-  // publication 에 없어(schema.sql 은 days 와 places 만 등록한다) 다른 탭이나 다른 멤버가
-  // 링크를 새로 만들어도 이 화면은 그것을 모르고, 이미 죽은 토큰을 계속 복사해 내준다.
-  // 그 링크를 받은 사람은 /?error=invalid_invite 만 보게 되고 왜 안 되는지 알 방법이 없다.
-  // standalone PWA 라 화면이 며칠씩 살아 있을 수 있어 창이 좁지도 않다.
-  //
-  // 왜 복사를 누를 때가 아니라 메뉴를 열 때인가 — iOS(WebKit)는 사용자 제스처 task 밖에서
-  // 부른 navigator.clipboard.writeText 를 NotAllowedError 로 거부한다. 복사를 누른 뒤에
-  // 이 조회를 await 하면 뒤이은 쓰기가 제스처 밖으로 밀려 아이폰에서는 매번 실패한다.
-  // 조회를 여기로 옮겨 두면 복사 클릭은 await 없이 곧바로 클립보드에 쓸 수 있다
-  // (아래 copyInviteLink 참고). 대신 값이 낡을 수 있는 창이 '메뉴를 연 시점 ~ 복사를 누른
-  // 시점' 만큼 남지만, 며칠 살아 있던 화면에 비하면 몇 초라 그만큼은 받아들인다.
-  //
-  // 이 조회는 trips_select 정책을 타므로 멤버와 만든 사람은 그대로 통과한다.
-  useEffect(() => {
-    if (!open) return
-    // 이 조회의 순번을 발급받는다. 결과를 쓰기 직전에 이 값이 아직 최신인지 본다.
-    const seq = ++loadSeqRef.current
-    void (async () => {
-      try {
-        const { data, error } = await supabase
-          .from('trips')
-          .select('invite_token')
-          .eq('id', tripId)
-          .single()
-        // 순번이 이미 밀렸으면 아무것도 쓰지 않는다. 메뉴가 닫혔거나(닫은 뒤 안내가 뒤늦게
-        // 뜨는 것을 막는다) 그 사이에 링크를 새로 만들었다는(방금 만든 토큰이 회전 전 값으로
-        // 덮이는 것을 막는다) 뜻이고, 어느 쪽이든 이 결과는 이미 낡았다.
-        if (seq !== loadSeqRef.current) return
-        if (error || !data) throw new Error('invite token unavailable')
-        setLoadFailed(false)
-        setInviteToken(data.invite_token)
-      } catch {
-        // 조회가 던지는 경우까지 같은 자리에서 받는다. 예외가 새어 나가면 복사 버튼만
-        // 이유 없이 눌리지 않는 상태로 남아, 사용자는 아무 안내도 받지 못한다.
-        if (seq !== loadSeqRef.current) return
-        setLoadFailed(true)
-      }
-    })()
-    return () => {
-      // 아직 돌아오지 않은 조회를 무효로 만든다
-      invalidateInviteLoads()
-      // 메뉴를 닫을 때 비워 다음에 열 때 반드시 새로 읽게 한다. 남겨 두면 한 번 열었던
-      // 화면이 그때의 토큰을 계속 내주게 되어, 조회를 메뉴 열기로 옮긴 뜻이 없어진다.
-      setInviteToken(null)
-      setLoadFailed(false)
-    }
-  }, [open, supabase, tripId, invalidateInviteLoads])
-
-  // 토큰을 아직 읽는 중인가. 읽지 못한 것과 가른다 — 그쪽은 더 이상 진행 중이 아니고,
-  // 복사 버튼 아래 안내가 이유를 알린다.
-  const loadingInvite = open && !inviteToken && !loadFailed
+  // 지금 복사해 줄 초대 토큰. 링크를 새로 만든 뒤에는 그 값이, 그전에는 화면을 그릴 때 받은
+  // prop 이 쓰인다.
+  const currentToken = rotatedToken ?? inviteToken
 
   // 다음 로케일은 공유 목록에서 순환시켜 구한다 (LocaleSwitcher 와 같은 규칙)
   const current: Locale = isLocale(locale) ? locale : defaultLocale
@@ -1179,7 +1141,7 @@ function HeaderMenu({
 
   function toggleLocale() {
     setLocaleCookie(nextLocale)
-    startTransition(() => { router.refresh(); setOpen(false) })
+    startTransition(() => { router.refresh(); setMenuOpen(false) })
   }
 
   // 메뉴를 닫고 포커스를 ⋮ 트리거로 되돌린다. 메뉴가 사라지면 그 안에서 포커스를 쥐고 있던
@@ -1196,19 +1158,20 @@ function HeaderMenu({
   // 사용자가 먼저 닫고 다른 곳(장소 카드, 편집 모달 입력란)으로 옮겨 갈 수 있는데, 그 자리에
   // 응답이 도착해 포커스를 ⋮ 로 끌어오면 사용자가 골라 둔 자리를 빼앗고 모바일에서는
   // 키보드가 내려간다. 애초에 메뉴가 가져간 포커스가 없으니 되돌릴 것도 없다.
-  // 판정을 openRef 로 하는 이유는 그 선언 자리에 적어 두었다.
+  // 판정을 menuOpenRef 로 하는 이유는 그 선언 자리에 적어 두었다.
   function closeMenu() {
-    const wasOpen = openRef.current
-    setOpen(false)
+    const wasOpen = menuOpenRef.current
+    setMenuOpen(false)
     if (wasOpen) triggerRef.current?.focus()
   }
 
   // 토큰을 받아 링크를 복사한다. 메뉴의 '초대 링크 복사'와 새로 만든 직후의 자동 복사가
   // 같은 함수를 쓴다 — 새로 만든 사람은 곧바로 새 링크를 공유해야 하기 때문이다.
   //
-  // 이 함수는 async 가 아니고, writeText 앞에 await 가 하나도 없다. 그 순서를 지키려고
-  // 서버 조회를 메뉴 열기로 옮겨 두었다(위 effect). 여기에 await 를 하나라도 끼워 넣으면
-  // 아이폰에서 복사가 조용히 깨지므로, 필요한 값은 반드시 미리 받아 두고 인자로 넘길 것.
+  // 이 함수는 async 가 아니고, writeText 앞에 await 가 하나도 없다. 여기에 await 를 하나라도
+  // 끼워 넣으면 아이폰에서 복사가 조용히 깨지므로(iOS 는 사용자 제스처 task 밖의 clipboard
+  // 쓰기를 거부한다), 필요한 값은 반드시 미리 손에 들고 인자로 넘길 것. 토큰을 서버에서
+  // 읽어 오는 계층을 두지 않는 이유이기도 하다.
   //
   // afterRotate — 새로 만든 직후의 자동 복사인가. 복사가 실패했을 때 오류로 보일지
   // 안내로 보일지가 이 값으로 갈린다 (새로 만들기 자체는 이미 성공한 뒤라 오류가 아니다).
@@ -1241,7 +1204,7 @@ function HeaderMenu({
         // 되돌리고 메뉴를 닫는 타이머도 이미 닫힌 메뉴에는 할 일이 없다. 걸어 두면 오히려
         // 해롭다: 위 정리 effect 는 메뉴가 열려 있는 동안만 걷을 채비를 하므로 이 타이머는
         // 아무도 취소하지 못한 채 남아, 1.5초 안에 다시 연 메뉴를 그대로 닫아 버린다.
-        if (!openRef.current) return
+        if (!menuOpenRef.current) return
         setCopied(true)
         // 앞선 복사가 남긴 타이머를 먼저 걷는다. 겹쳐 걸면 먼저 건 쪽을 취소할 길이 없어져
         // 뒤늦게 발화해 그때 열려 있던 메뉴를 닫는다.
@@ -1256,7 +1219,7 @@ function HeaderMenu({
           // 순간 disabled 가 되는 버튼(새로 만들기·나가기)에서는 같은 가드가 늘 거짓이라,
           // closeMenu 는 포커스 위치가 아니라 '메뉴가 열려 있었는가' 로 가른다.
           const focusWasInMenu = ref.current?.contains(document.activeElement) ?? false
-          setOpen(false)
+          setMenuOpen(false)
           if (focusWasInMenu) triggerRef.current?.focus()
         }, 1500)
       },
@@ -1284,12 +1247,10 @@ function HeaderMenu({
   // 복사 클릭 — 이 경로에는 await 가 하나도 없어야 한다.
   // iOS(WebKit)는 사용자 제스처 task 안에서 부르지 않은 clipboard 쓰기를 NotAllowedError 로
   // 거부한다. 여기나 copyLink 앞에 await 가 하나라도 끼면 writeText 가 다음 task 로 밀려
-  // 아이폰에서는 매번 복사가 실패하고 '직접 복사' 안내만 뜬다. 토큰이 필요하다고 여기서
-  // 서버를 부르지 말 것 — 그 조회는 메뉴를 열 때 미리 해 둔다(위 effect).
+  // 아이폰에서는 매번 복사가 실패하고 '직접 복사' 안내만 뜬다. 최신 토큰을 확인하겠다고
+  // 여기서 서버를 부르지 말 것 — 그러자고 넣은 조회 계층을 걷어낸 자리다.
   function copyInviteLink() {
-    // 토큰을 아직 못 받았으면 버튼이 disabled 라 눌릴 일이 없다. 그래도 값을 그냥 믿지 않는다.
-    if (!inviteToken) return
-    copyLink(inviteToken, false)
+    copyLink(currentToken, false)
   }
 
   async function leaveTrip() {
@@ -1432,16 +1393,10 @@ function HeaderMenu({
       }
 
       // 메뉴가 열린 채로 이어서 '초대 링크 복사'를 누를 수 있으므로 들고 있던 토큰도
-      // 방금 만든 값으로 바꿔 둔다. 그러지 않으면 이 메뉴를 닫을 때까지 옛 토큰을 내준다.
-      //
-      // 세우기 전에 순번을 올려, 메뉴를 열 때 시작해 아직 돌아오지 않은 조회를 모두 무효로
-      // 만든다. 그러지 않으면 그 조회가 회전 전 토큰을 들고 뒤늦게 돌아와 여기서 세운 새
-      // 토큰을 덮고, 이어서 누른 '초대 링크 복사'가 방금 무효로 만든 링크를 복사해 내준다 —
-      // 이 기능이 막으려던 바로 그 일이다. 아래 자동 복사의 판정이 날 때까지는 메뉴가 열린
-      // 채라(판정이 나면 closeMenu 로 닫는다) 그 사이에 사용자가 이어서 복사를 누를 수 있다.
-      invalidateInviteLoads()
-      setLoadFailed(false)
-      setInviteToken(newToken)
+      // 방금 만든 값으로 바꿔 둔다. 그러지 않으면 이 화면이 사라질 때까지 옛 토큰을 내준다.
+      // (아래 자동 복사의 판정이 날 때까지는 메뉴가 열린 채라 — 판정이 나면 closeMenu 로
+      //  닫는다 — 그 사이에 사용자가 이어서 복사를 누를 수 있다)
+      setRotatedToken(newToken)
 
       // 링크를 무효로 만든 사람은 곧바로 새 링크를 공유해야 하므로 자동으로 복사해 준다.
       // 다만 여기는 update 왕복 뒤라 사용자 제스처가 이미 끝났고, iOS 는 그 상태의 clipboard
@@ -1450,14 +1405,11 @@ function HeaderMenu({
       // 드문 동작이라 이 처리로 충분하다.
       copyLink(newToken, true)
 
-      // 여기서 router.refresh() 를 부르지 않는다. 클라이언트에서 trips.invite_token 을 읽는
-      // 곳이 하나도 없어(이 메뉴가 필요할 때 직접 조회한다) 서버를 다시 그려도 화면에서
-      // 달라지는 것이 없다. 오히려 해롭다 — layout 의 messages 가 매 요청 새 객체로
-      // 직렬화되어 t 가 새로 만들어지고, 그것을 deps 로 쓰는 effect 가 teardown 된다.
-      // 그러면 방금 세운 토큰이 null 로 지워진 뒤 조회가 한 번 더 돌아 복사 버튼이 깜빡이고,
-      // 그 재조회가 실패하면 성공한 새로 만들기 위에 실패 안내가 뜬다.
-      // (위 조회 effect 의 deps 에서는 t 를 걷어냈지만, 부를 이유가 없는 호출을 남겨 두면
-      //  같은 결합이 언제든 되살아난다)
+      // 여기서 router.refresh() 를 부르지 않는다. 화면에서 달라지는 것이 하나도 없기
+      // 때문이다 — 방금 만든 토큰은 위 setRotatedToken 이 이미 들고 있고, 그 값이 prop 보다
+      // 먼저 쓰인다. 서버를 다시 그려 봐야 새 trip 을 한 번 더 받아 오는 왕복만 늘어난다.
+      // (그 결과로 inviteToken prop 이 갱신될 일도 없어진다. rotatedToken 을 prop 변화로
+      //  버리는 effect 를 두지 않은 이유이기도 하다 — 그 선언 자리에 적어 두었다)
     } catch {
       failRotate()
     } finally {
@@ -1466,9 +1418,14 @@ function HeaderMenu({
     }
   }
 
+  // 메뉴는 닫고 안내는 날짜 탭 아래 배너에 띄운다 (failLeave 와 같다). 다만 문구가 아니라
+  // 키를 올린다 — 성공·수동 복사 안내와 같은 자리에 나란히 뜨는 오류라, 한쪽만 문구를 담아
+  // 두면 언어를 바꿨을 때 같은 자리의 두 줄이 서로 다르게 움직인다.
+  // (actionError 를 쓰는 나머지 문구는 아직 문구 방식이다 — 그 경계는 본체의 actionError
+  //  선언 자리에 적어 두었다)
   function failRotate() {
-    closeMenu() // 메뉴는 닫고 안내는 날짜 탭 아래 배너에 띄운다 (failLeave 와 같다)
-    onError(t('rotateInviteFailed'))
+    closeMenu()
+    onInviteNotice({ messageKey: 'rotateInviteFailed', url: null, isError: true })
   }
 
   return (
@@ -1477,7 +1434,7 @@ function HeaderMenu({
         ref={triggerRef}
         /* 복사 결과 안내는 여기서 지우지 않는다. 메뉴와 무관하게 화면에 남기는 것이
            그 안내를 메뉴 밖으로 옮긴 이유이고, 지우는 자리는 ✕ 와 다음 복사·새로 만들기다. */
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setMenuOpen(!open)}
         className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 active:bg-gray-200 text-lg leading-none"
         aria-label={tNav('moreMenu')}
         aria-haspopup="menu"
@@ -1491,35 +1448,21 @@ function HeaderMenu({
             href={`/trip/${tripId}/import`}
             role="menuitem"
             className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100"
-            onClick={() => setOpen(false)}
+            onClick={() => setMenuOpen(false)}
           >
             {tNav('import')}
           </Link>
           <button
             onClick={copyInviteLink}
-            /* 토큰을 읽어 오기 전이거나 읽지 못했으면 누르지 못한다 (fail-closed).
-               읽지 못한 경우는 바로 아래 안내가 이유를 알린다.
-               새로 만드는 중에도 잠근다 — update 응답이 오기 전까지 inviteToken 은 아직
+            /* 새로 만드는 중에는 잠근다 — update 응답이 오기 전까지 currentToken 은 아직
                회전 전 값이라, 그 사이에 복사하면 곧 무효가 될 링크를 내주게 된다. */
-            disabled={!inviteToken || rotating}
-            /* 잠긴 이유가 '진행 중'일 때만 그렇게 알린다 (같은 메뉴의 새로 만들기·언어 전환·
-               나가기와 같은 방식이다). 메뉴를 열면 조회 왕복 한 번만큼은 반드시 비활성이고,
-               새로 만드는 왕복도 마찬가지다. 읽지 못해 잠긴 것은 진행 중이 아니므로
-               아래 안내가 대신 맡는다. */
-            aria-busy={loadingInvite || rotating}
+            disabled={rotating}
+            aria-busy={rotating}
             role="menuitem"
             className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50"
           >
             {copied ? tCommon('copied') : tNav('copyInviteLink')}
           </button>
-          {/* 조회 실패는 화면 아래 공용 배너가 아니라 여기에 띄운다. 복사 버튼이 왜 잠겨
-              있는지는 그 버튼 옆에서 읽혀야 하고, 메뉴를 닫으면 함께 사라지는 것이 맞다.
-              복사 결과와 갈리는 지점이다 — 그쪽은 메뉴가 닫혀도 남아야 하는 값이다. */}
-          {loadFailed && (
-            <p role="alert" className="px-4 pb-2 text-[10px] leading-snug text-red-500">
-              {t('loadInviteLinkFailed')}
-            </p>
-          )}
           {isOwner && (
             <button
               onClick={rotateInvite}

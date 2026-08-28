@@ -109,7 +109,6 @@
       "addDayFailed": "Couldn't add the day. Please try again.",
       "addDayDuplicate": "That date already exists.",
       "copyLinkFailed": "Couldn't copy the link. Copy the address below manually.",
-      "loadInviteLinkFailed": "Couldn't load the invite link. Please try again in a moment.",
       "distanceError": "Couldn't load the distance.",
       "distanceEmpty": "No routes available.",
       "leaveTripConfirm": "You will leave this trip. You'll need an invite link to rejoin. Continue?",

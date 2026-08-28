@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import {
   INVITE_TOKEN_COOKIE,
   INVITE_TOKEN_MAX_AGE,
-  isInviteToken,
+  normalizeInviteToken,
 } from '@/lib/invite'
 
 // Next.js 16 에서 `middleware` 파일/이름 규칙은 deprecated 되고 `proxy` 로 바뀌었다.
@@ -46,12 +46,16 @@ export async function proxy(request: NextRequest) {
   // 페이지 렌더(서버 컴포넌트/클라이언트 컴포넌트) 로는 httpOnly 쿠키를 심을 수 없기 때문이다.
   // 여기서 쿠키를 다시 심어 두면 앱 내 브라우저에서 외부 브라우저로 링크가 넘어가
   // 원래 쿠키가 따라오지 못한 경우에도 바뀐 브라우저에 토큰이 새로 남는다.
-  const inviteParam = request.nextUrl.searchParams.get('invite')
-  if (request.nextUrl.pathname === '/login' && isInviteToken(inviteParam)) {
+  //
+  // 쿼리에 적힌 대소문자를 그대로 흘려보내지 않는다. 여기서 맞춰 두면 아래에서 심는 쿠키와
+  // /invite 로 보내는 주소가 초대 라우트가 쓰는 값과 같은 모양이 된다
+  // (왜 정규화가 필요한지는 lib/invite.ts 의 normalizeInviteToken 에 적어 두었다).
+  const inviteToken = normalizeInviteToken(request.nextUrl.searchParams.get('invite'))
+  if (request.nextUrl.pathname === '/login' && inviteToken) {
     // 이미 로그인한 사용자라면 로그인 화면을 다시 볼 이유가 없으니 바로 초대 수락으로 보낸다
     if (user) {
       const url = request.nextUrl.clone()
-      url.pathname = `/invite/${inviteParam}`
+      url.pathname = `/invite/${inviteToken}`
       url.search = ''
       const redirectResponse = NextResponse.redirect(url)
       // 위 getUser() 가 refresh 토큰을 회전시켰다면 갱신된 세션 쿠키가
@@ -71,7 +75,7 @@ export async function proxy(request: NextRequest) {
 
     // supabaseResponse 는 위 setAll 콜백에서 새로 만들어졌을 수 있으므로
     // 반환 직전인 여기서 쿠키를 심어야 한다.
-    supabaseResponse.cookies.set(INVITE_TOKEN_COOKIE, inviteParam, {
+    supabaseResponse.cookies.set(INVITE_TOKEN_COOKIE, inviteToken, {
       httpOnly: true,
       maxAge: INVITE_TOKEN_MAX_AGE,
       sameSite: 'lax',
