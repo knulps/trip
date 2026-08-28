@@ -624,7 +624,6 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
             'isOwner' 하나로 넘긴다. */}
         <HeaderMenu
           tripId={trip.id}
-          inviteToken={trip.invite_token}
           userId={userId}
           isOwner={trip.created_by === userId}
           onError={setActionError}
@@ -681,7 +680,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
         </div>
       </div>
 
-      {/* 날짜 추가/삭제, 여행 나가기 실패, 접근 상실 안내 */}
+      {/* 날짜 추가/삭제, 여행 나가기, 초대 링크 새로 만들기, 초대 링크 조회 실패, 접근 상실 안내 */}
       {actionError && (
         <div className="flex items-start gap-2 px-4 pb-2">
           <p role="alert" className="flex-1 text-xs text-red-600">{actionError}</p>
@@ -953,18 +952,17 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
 // 헤더 더보기 메뉴 (가져오기 + 초대 + 나가기)
 function HeaderMenu({
   tripId,
-  inviteToken,
   userId,
   isOwner,
   onError,
   onLeaving,
 }: {
   tripId: string
-  inviteToken: string
   userId: string
   // 여행을 만든 사람인가. 초대 링크 새로 만들기는 이 사람만, 나가기는 이 사람만 빼고 보인다.
   isOwner: boolean
-  onError: (message: string) => void
+  // null 을 넘기면 배너를 지운다 (동작을 시작할 때 지난 실패 문구를 걷어 내는 용도)
+  onError: (message: string | null) => void
   // 나가기가 확정되어 이 화면을 떠난다고 본체에 알린다 (본체는 뒤늦은 접근 상실 안내를 접는다)
   onLeaving: () => void
 }) {
@@ -976,15 +974,20 @@ function HeaderMenu({
   const supabase = createClient()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [manualCopyUrl, setManualCopyUrl] = useState<string | null>(null)
+  // 메뉴를 연 시점에 서버에서 읽어 둔 초대 토큰. 아직 못 읽었거나 읽지 못했으면 null 이고,
+  // 그동안 '초대 링크 복사'는 눌리지 않는다 — 죽은 링크를 공유하느니 복사가 안 되는 편이 낫다.
+  const [inviteToken, setInviteToken] = useState<string | null>(null)
+  // 복사에 실패해 주소를 직접 노출할 때 쓰는 값. 새로 만든 직후의 자동 복사였는지
+  // (afterRotate)를 함께 담는다 — 그때는 링크를 새로 만드는 데 이미 성공한 뒤라
+  // 복사가 안 된 것을 오류가 아니라 안내로 보여야 한다.
+  const [manualCopy, setManualCopy] = useState<{ url: string; afterRotate: boolean } | null>(null)
   const [leaving, setLeaving] = useState(false)
   const [rotating, setRotating] = useState(false)
-  // 초대 링크를 새로 만든 직후의 토큰. router.refresh() 로 새 trip 이 내려오기 전까지
-  // inviteToken prop 은 방금 무효가 된 옛 토큰이라, 링크를 만들 때는 이 값을 먼저 쓴다.
-  const [rotatedToken, setRotatedToken] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  // 초대 링크 조회가 실패해 배너를 띄웠는지. 다음 조회가 성공하면 그 배너만 골라 지운다.
+  const loadFailedRef = useRef(false)
 
   useEffect(() => {
     if (!open) return
@@ -1005,6 +1008,59 @@ function HeaderMenu({
     }
   }, [open])
 
+  // 메뉴를 열 때 지금 초대 토큰을 서버에서 미리 읽어 둔다.
+  //
+  // 왜 서버에서 읽는가 — 화면이 들고 있는 값은 얼마든지 낡을 수 있다. trips 는 Realtime
+  // publication 에 없어(schema.sql 은 days 와 places 만 등록한다) 다른 탭이나 다른 멤버가
+  // 링크를 새로 만들어도 이 화면은 그것을 모르고, 이미 죽은 토큰을 계속 복사해 내준다.
+  // 그 링크를 받은 사람은 /?error=invalid_invite 만 보게 되고 왜 안 되는지 알 방법이 없다.
+  // standalone PWA 라 화면이 며칠씩 살아 있을 수 있어 창이 좁지도 않다.
+  //
+  // 왜 복사를 누를 때가 아니라 메뉴를 열 때인가 — iOS(WebKit)는 사용자 제스처 task 밖에서
+  // 부른 navigator.clipboard.writeText 를 NotAllowedError 로 거부한다. 복사를 누른 뒤에
+  // 이 조회를 await 하면 뒤이은 쓰기가 제스처 밖으로 밀려 아이폰에서는 매번 실패한다.
+  // 조회를 여기로 옮겨 두면 복사 클릭은 await 없이 곧바로 클립보드에 쓸 수 있다
+  // (아래 copyInviteLink 참고). 대신 값이 낡을 수 있는 창이 '메뉴를 연 시점 ~ 복사를 누른
+  // 시점' 만큼 남지만, 며칠 살아 있던 화면에 비하면 몇 초라 그만큼은 받아들인다.
+  //
+  // 이 조회는 trips_select 정책을 타므로 멤버와 만든 사람은 그대로 통과한다.
+  useEffect(() => {
+    if (!open) return
+    // 조회가 끝나기 전에 메뉴가 닫히면 결과를 버린다 (닫은 뒤 배너가 뒤늦게 뜨지 않도록)
+    let alive = true
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('trips')
+          .select('invite_token')
+          .eq('id', tripId)
+          .single()
+        if (!alive) return
+        if (error || !data) throw new Error('invite token unavailable')
+        // 앞서 이 조회가 띄운 실패 배너가 있으면 지운다. 이제 복사 버튼이 살아나는데
+        // '가져오지 못했습니다' 가 남아 있으면 아직 안 되는 상태로 읽힌다.
+        // 내가 띄운 것일 때만 지운다 — 날짜 삭제 실패 같은 남의 안내까지 걷어내면 안 된다.
+        if (loadFailedRef.current) {
+          loadFailedRef.current = false
+          onError(null)
+        }
+        setInviteToken(data.invite_token)
+      } catch {
+        // 조회가 던지는 경우까지 같은 자리에서 받는다. 예외가 새어 나가면 복사 버튼만
+        // 이유 없이 눌리지 않는 상태로 남아, 사용자는 아무 안내도 받지 못한다.
+        if (!alive) return
+        loadFailedRef.current = true
+        onError(t('loadInviteLinkFailed'))
+      }
+    })()
+    return () => {
+      alive = false
+      // 메뉴를 닫을 때 비워 다음에 열 때 반드시 새로 읽게 한다. 남겨 두면 한 번 열었던
+      // 화면이 그때의 토큰을 계속 내주게 되어, 조회를 메뉴 열기로 옮긴 뜻이 없어진다.
+      setInviteToken(null)
+    }
+  }, [open, supabase, tripId, onError, t])
+
   // 다음 로케일은 공유 목록에서 순환시켜 구한다 (LocaleSwitcher 와 같은 규칙)
   const current: Locale = isLocale(locale) ? locale : defaultLocale
   const nextLocale: Locale = locales[(locales.indexOf(current) + 1) % locales.length]
@@ -1022,38 +1078,58 @@ function HeaderMenu({
     startTransition(() => { router.refresh(); setOpen(false) })
   }
 
-  // 서버가 새 토큰을 내려보내면 손에 들고 있던 값을 버린다.
-  // 그러지 않으면 탭을 두 개 열어 두고 각각 새 링크를 만들었을 때, 먼저 만든 탭이
-  // 나중에 무효가 된 자기 토큰을 계속 복사해 공유하게 된다.
-  // 서버가 준 값이 언제나 최신이므로 prop 이 바뀌면 조건 없이 비운다.
-  useEffect(() => {
-    setRotatedToken(null)
-  }, [inviteToken])
-
-  // 지금 유효한 초대 토큰. 새로 만든 직후에는 아직 prop 이 옛 값이라 그 사이만 이 값을 쓴다.
-  const currentToken = rotatedToken ?? inviteToken
-
   // 토큰을 받아 링크를 복사한다. 메뉴의 '초대 링크 복사'와 새로 만든 직후의 자동 복사가
   // 같은 함수를 쓴다 — 새로 만든 사람은 곧바로 새 링크를 공유해야 하기 때문이다.
-  // 토큰을 인자로 받는 이유: 새로 만든 직후에는 setRotatedToken 이 아직 반영되지 않아
-  // 위 currentToken 이 옛 토큰인 채라, 방금 만든 토큰을 직접 넘겨야 한다.
-  async function copyLink(token: string) {
+  //
+  // 이 함수는 async 가 아니고, writeText 앞에 await 가 하나도 없다. 그 순서를 지키려고
+  // 서버 조회를 메뉴 열기로 옮겨 두었다(위 effect). 여기에 await 를 하나라도 끼워 넣으면
+  // 아이폰에서 복사가 조용히 깨지므로, 필요한 값은 반드시 미리 받아 두고 인자로 넘길 것.
+  //
+  // afterRotate — 새로 만든 직후의 자동 복사인가. 복사가 실패했을 때 오류로 보일지
+  // 안내로 보일지가 이 값으로 갈린다 (새로 만들기 자체는 이미 성공한 뒤라 오류가 아니다).
+  function copyLink(token: string, afterRotate: boolean) {
+    // 지난 실패 문구를 걷어 낸다 (deleteDay 와 AddDayButton.addDay 도 같은 자리에서 지운다)
+    onError(null)
+    setManualCopy(null)
+
     const url = `${window.location.origin}/invite/${token}`
-    setManualCopyUrl(null)
-    try {
-      // HTTPS가 아니거나 권한이 거부되면 clipboard가 없거나 reject됨
-      if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable')
-      await navigator.clipboard.writeText(url)
-      setCopied(true)
-      setTimeout(() => { setCopied(false); setOpen(false) }, 1500)
-    } catch {
-      // 직접 복사할 수 있도록 주소를 노출
-      setManualCopyUrl(url)
+    // HTTPS가 아니거나 권한이 거부되면 clipboard가 없거나 reject됨.
+    // 어느 쪽이든 직접 복사할 수 있도록 주소를 노출한다.
+    if (!navigator.clipboard?.writeText) {
+      setManualCopy({ url, afterRotate })
+      return
     }
+    // 결과를 then 으로 받는 것도 같은 이유다. 쓰기를 부른 뒤라면 기다려도 상관없지만,
+    // 이 함수를 async 로 두면 나중에 앞쪽에 await 를 넣기 쉬워져 그 문을 아예 닫아 둔다.
+    navigator.clipboard.writeText(url).then(
+      () => {
+        setCopied(true)
+        setTimeout(() => {
+          setCopied(false)
+          // 메뉴를 닫으면 방금 누른 버튼이 함께 언마운트되어 포커스가 <body> 로 떨어진다.
+          // failLeave·failRotate 와 같게 트리거로 되돌리되, 1.5초 사이에 사용자가 메뉴 밖으로
+          // 포커스를 옮겼다면 그대로 둔다 (거기서 포커스를 빼앗는 쪽이 더 나쁘다).
+          const focusWasInMenu = ref.current?.contains(document.activeElement) ?? false
+          setOpen(false)
+          if (focusWasInMenu) triggerRef.current?.focus()
+        }, 1500)
+      },
+      () => {
+        // 직접 복사할 수 있도록 주소를 노출
+        setManualCopy({ url, afterRotate })
+      }
+    )
   }
 
+  // 복사 클릭 — 이 경로에는 await 가 하나도 없어야 한다.
+  // iOS(WebKit)는 사용자 제스처 task 안에서 부르지 않은 clipboard 쓰기를 NotAllowedError 로
+  // 거부한다. 여기나 copyLink 앞에 await 가 하나라도 끼면 writeText 가 다음 task 로 밀려
+  // 아이폰에서는 매번 복사가 실패하고 '직접 복사' 안내만 뜬다. 토큰이 필요하다고 여기서
+  // 서버를 부르지 말 것 — 그 조회는 메뉴를 열 때 미리 해 둔다(위 effect).
   function copyInviteLink() {
-    void copyLink(currentToken)
+    // 토큰을 아직 못 받았으면 버튼이 disabled 라 눌릴 일이 없다. 그래도 값을 그냥 믿지 않는다.
+    if (!inviteToken) return
+    copyLink(inviteToken, false)
   }
 
   async function leaveTrip() {
@@ -1159,6 +1235,11 @@ function HeaderMenu({
     // 가드는 막으려는 상태를 세우는 자리에 붙여 두어야 읽을 때 짝이 보인다.
     if (rotating) return
     setRotating(true)
+    // 시작할 때 지난 배너를 지운다. 그러지 않으면 한 번 실패해 뜬 '새로 만들지 못했습니다'가
+    // 재시도해 성공한 뒤에도 그대로 남아, 옛 링크가 아직 살아 있다고 믿게 만든다. 옛 링크를
+    // 끊는 것이 이 기능의 존재 이유라 화면에 남은 신호가 사실과 반대인 것은 그냥 둘 수 없다.
+    // (deleteDay 와 AddDayButton.addDay 도 같은 자리에서 지운다)
+    onError(null)
     try {
       // secure context 가 아니면 crypto.randomUUID 가 없다 (copyInviteLink 가 clipboard
       // 부재를 다루는 것과 같은 상황이다). 없다고 다른 난수로 대신 만들면 추측할 수 있는
@@ -1190,11 +1271,16 @@ function HeaderMenu({
         return
       }
 
-      // 새 토큰을 먼저 손에 쥔다. 아래 복사도, 이후의 '초대 링크 복사'도 이 값을 쓴다.
-      setRotatedToken(newToken)
+      // 메뉴가 열린 채로 이어서 '초대 링크 복사'를 누를 수 있으므로 들고 있던 토큰도
+      // 방금 만든 값으로 바꿔 둔다. 그러지 않으면 이 메뉴를 닫을 때까지 옛 토큰을 내준다.
+      setInviteToken(newToken)
+
       // 링크를 무효로 만든 사람은 곧바로 새 링크를 공유해야 하므로 자동으로 복사해 준다.
-      // 복사에 실패하면 copyLink 가 주소를 노출해 직접 복사하게 한다.
-      await copyLink(newToken)
+      // 다만 여기는 update 왕복 뒤라 사용자 제스처가 이미 끝났고, iOS 는 그 상태의 clipboard
+      // 쓰기를 거부한다. 그래도 이대로 둔다 — 새로 만들기 자체는 성공했고, 복사가 안 되면
+      // copyLink 가 주소를 노출해 직접 복사하게 한다(오류가 아니라 안내로). 새로 만들기는
+      // 드문 동작이라 이 처리로 충분하다.
+      copyLink(newToken, true)
       router.refresh()
     } catch {
       failRotate()
@@ -1215,7 +1301,7 @@ function HeaderMenu({
     <div ref={ref} className="relative shrink-0">
       <button
         ref={triggerRef}
-        onClick={() => { setManualCopyUrl(null); setOpen(v => !v) }}
+        onClick={() => { setManualCopy(null); setOpen(v => !v) }}
         className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 active:bg-gray-200 text-lg leading-none"
         aria-label={tNav('moreMenu')}
         aria-haspopup="menu"
@@ -1235,17 +1321,28 @@ function HeaderMenu({
           </Link>
           <button
             onClick={copyInviteLink}
+            /* 토큰을 읽어 오기 전이거나 읽지 못했으면 누르지 못한다 (fail-closed).
+               읽지 못한 경우는 위 effect 가 배너로 알린다. */
+            disabled={!inviteToken}
             role="menuitem"
-            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50"
           >
             {copied ? tCommon('copied') : tNav('copyInviteLink')}
           </button>
-          {manualCopyUrl && (
+          {manualCopy && (
             <div className="px-4 pb-2">
-              <p role="alert" className="text-[10px] leading-snug text-red-500">{t('copyLinkFailed')}</p>
+              {/* 새로 만든 직후의 자동 복사 실패는 오류가 아니다 — 링크는 이미 새로 만들어졌고,
+                  iOS 에서는 위 rotateInvite 의 설명대로 거의 매번 여기로 온다. 그때까지 붉은 오류
+                  문구로 띄우면 성공한 동작을 실패로 읽게 되므로 문구와 색을 갈라 놓는다. */}
+              <p
+                role={manualCopy.afterRotate ? 'status' : 'alert'}
+                className={`text-[10px] leading-snug ${manualCopy.afterRotate ? 'text-gray-500' : 'text-red-500'}`}
+              >
+                {manualCopy.afterRotate ? t('rotateInviteCopyManually') : t('copyLinkFailed')}
+              </p>
               <input
                 readOnly
-                value={manualCopyUrl}
+                value={manualCopy.url}
                 onFocus={(e) => e.currentTarget.select()}
                 aria-label={tNav('copyInviteLink')}
                 className="mt-1 w-48 rounded border border-gray-200 px-2 py-1 text-[10px] text-gray-700"

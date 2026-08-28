@@ -109,12 +109,14 @@
       "addDayFailed": "날짜를 추가하지 못했습니다. 잠시 후 다시 시도해 주세요.",
       "addDayDuplicate": "이미 같은 날짜가 있습니다.",
       "copyLinkFailed": "링크를 복사하지 못했습니다. 아래 주소를 직접 복사해 주세요.",
+      "loadInviteLinkFailed": "초대 링크를 가져오지 못했습니다. 잠시 후 다시 시도해 주세요.",
       "distanceError": "거리를 불러오지 못했습니다.",
       "distanceEmpty": "이용할 수 있는 경로가 없습니다.",
       "leaveTripConfirm": "이 여행에서 나갑니다. 다시 참여하려면 초대 링크가 필요합니다. 계속할까요?",
       "leaveTripFailed": "여행에서 나가지 못했습니다. 잠시 후 다시 시도해 주세요.",
       "rotateInviteConfirm": "지금까지 공유한 초대 링크가 모두 무효가 됩니다. 새 링크를 만들까요?",
       "rotateInviteFailed": "초대 링크를 새로 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "rotateInviteCopyManually": "새 초대 링크를 만들었습니다. 아래 주소를 복사해 공유해 주세요.",
       "accessLost": "이 여행에 더 이상 접근할 수 없습니다."
     },
     "placeList": {
