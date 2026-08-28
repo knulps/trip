@@ -16,6 +16,7 @@
     "moreMenu": "더보기",
     "import": "가져오기",
     "copyInviteLink": "초대 링크 복사",
+    "rotateInviteLink": "초대 링크 새로 만들기",
     "switchLanguage": "언어 전환",
     "back": "뒤로",
     "leaveTrip": "여행 나가기"
@@ -112,6 +113,8 @@
       "distanceEmpty": "이용할 수 있는 경로가 없습니다.",
       "leaveTripConfirm": "이 여행에서 나갑니다. 다시 참여하려면 초대 링크가 필요합니다. 계속할까요?",
       "leaveTripFailed": "여행에서 나가지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "rotateInviteConfirm": "지금까지 공유한 초대 링크가 모두 무효가 됩니다. 새 링크를 만들까요?",
+      "rotateInviteFailed": "초대 링크를 새로 만들지 못했습니다. 잠시 후 다시 시도해 주세요.",
       "accessLost": "이 여행에 더 이상 접근할 수 없습니다."
     },
     "placeList": {

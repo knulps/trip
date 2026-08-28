@@ -619,12 +619,14 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
           </p>
         </div>
         {/* 더보기 메뉴 */}
-        {/* 여행을 만든 사람은 나가지 못한다 (schema.sql 의 trip_members_delete 와 같은 조건) */}
+        {/* 여행을 만든 사람만 초대 링크를 새로 만들 수 있고(schema.sql 의 trips_update),
+            반대로 그 사람은 여행에서 나가지 못한다(trip_members_delete). 둘 다 같은 판정이라
+            'isOwner' 하나로 넘긴다. */}
         <HeaderMenu
           tripId={trip.id}
           inviteToken={trip.invite_token}
           userId={userId}
-          canLeave={trip.created_by !== userId}
+          isOwner={trip.created_by === userId}
           onError={setActionError}
           onLeaving={() => { leavingTripRef.current = true }}
         />
@@ -953,14 +955,15 @@ function HeaderMenu({
   tripId,
   inviteToken,
   userId,
-  canLeave,
+  isOwner,
   onError,
   onLeaving,
 }: {
   tripId: string
   inviteToken: string
   userId: string
-  canLeave: boolean
+  // 여행을 만든 사람인가. 초대 링크 새로 만들기는 이 사람만, 나가기는 이 사람만 빼고 보인다.
+  isOwner: boolean
   onError: (message: string) => void
   // 나가기가 확정되어 이 화면을 떠난다고 본체에 알린다 (본체는 뒤늦은 접근 상실 안내를 접는다)
   onLeaving: () => void
@@ -975,6 +978,10 @@ function HeaderMenu({
   const [copied, setCopied] = useState(false)
   const [manualCopyUrl, setManualCopyUrl] = useState<string | null>(null)
   const [leaving, setLeaving] = useState(false)
+  const [rotating, setRotating] = useState(false)
+  // 초대 링크를 새로 만든 직후의 토큰. router.refresh() 로 새 trip 이 내려오기 전까지
+  // inviteToken prop 은 방금 무효가 된 옛 토큰이라, 링크를 만들 때는 이 값을 먼저 쓴다.
+  const [rotatedToken, setRotatedToken] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -1015,8 +1022,23 @@ function HeaderMenu({
     startTransition(() => { router.refresh(); setOpen(false) })
   }
 
-  async function copyInviteLink() {
-    const url = `${window.location.origin}/invite/${inviteToken}`
+  // 서버가 새 토큰을 내려보내면 손에 들고 있던 값을 버린다.
+  // 그러지 않으면 탭을 두 개 열어 두고 각각 새 링크를 만들었을 때, 먼저 만든 탭이
+  // 나중에 무효가 된 자기 토큰을 계속 복사해 공유하게 된다.
+  // 서버가 준 값이 언제나 최신이므로 prop 이 바뀌면 조건 없이 비운다.
+  useEffect(() => {
+    setRotatedToken(null)
+  }, [inviteToken])
+
+  // 지금 유효한 초대 토큰. 새로 만든 직후에는 아직 prop 이 옛 값이라 그 사이만 이 값을 쓴다.
+  const currentToken = rotatedToken ?? inviteToken
+
+  // 토큰을 받아 링크를 복사한다. 메뉴의 '초대 링크 복사'와 새로 만든 직후의 자동 복사가
+  // 같은 함수를 쓴다 — 새로 만든 사람은 곧바로 새 링크를 공유해야 하기 때문이다.
+  // 토큰을 인자로 받는 이유: 새로 만든 직후에는 setRotatedToken 이 아직 반영되지 않아
+  // 위 currentToken 이 옛 토큰인 채라, 방금 만든 토큰을 직접 넘겨야 한다.
+  async function copyLink(token: string) {
+    const url = `${window.location.origin}/invite/${token}`
     setManualCopyUrl(null)
     try {
       // HTTPS가 아니거나 권한이 거부되면 clipboard가 없거나 reject됨
@@ -1028,6 +1050,10 @@ function HeaderMenu({
       // 직접 복사할 수 있도록 주소를 노출
       setManualCopyUrl(url)
     }
+  }
+
+  function copyInviteLink() {
+    void copyLink(currentToken)
   }
 
   async function leaveTrip() {
@@ -1124,6 +1150,67 @@ function HeaderMenu({
     onError(t('leaveTripFailed'))
   }
 
+  // 초대 링크 새로 만들기 — 지금까지 뿌린 링크를 한 번에 무효로 만든다.
+  // 여행에서 나간 사람이 예전 링크로 다시 들어오는 것을 막는 유일한 수단이다.
+  async function rotateInvite() {
+    if (!window.confirm(t('rotateInviteConfirm'))) return
+
+    // 연타 방지 — confirm 이 모달이라 실제로 겹쳐 들어오지는 않지만,
+    // 가드는 막으려는 상태를 세우는 자리에 붙여 두어야 읽을 때 짝이 보인다.
+    if (rotating) return
+    setRotating(true)
+    try {
+      // secure context 가 아니면 crypto.randomUUID 가 없다 (copyInviteLink 가 clipboard
+      // 부재를 다루는 것과 같은 상황이다). 없다고 다른 난수로 대신 만들면 추측할 수 있는
+      // 값이 초대 링크가 되므로, 만들지 못하면 그대로 실패로 알린다.
+      if (!crypto?.randomUUID) throw new Error('randomUUID unavailable')
+      const newToken = crypto.randomUUID()
+
+      // .select('invite_token') 으로 실제 바뀐 행을 받아 온다.
+      // PostgREST 의 update 는 RLS(trips_update = created_by = auth.uid())에 막혀 한 행도
+      // 바꾸지 못해도 error 가 null 이라, if (error) 만 보면 실패를 성공으로 오인한다.
+      // 그러면 사용자는 링크를 새로 만들었다고 믿고 예전 링크 공유를 그만두지만, 실제로는
+      // 그 링크가 그대로 살아 있어 나간 사람이 언제든 다시 들어올 수 있다.
+      // (leaveTrip 과 deleteDay, PlaceList.tsx, EditPlaceModal.tsx 이 모두 같은 방식을 쓴다)
+      const { data, error } = await supabase
+        .from('trips')
+        .update({ invite_token: newToken })
+        .eq('id', tripId)
+        .select('invite_token')
+
+      if (error) {
+        failRotate()
+        return
+      }
+
+      // 여기서 0행은 나가기·삭제와 달리 '남이 먼저 처리해 줬다'로 볼 여지가 없다.
+      // 토큰은 여행당 하나뿐이고 남이 바꾼 토큰은 내가 원한 값이 아니므로 실패로 본다.
+      if (!data || data.length === 0) {
+        failRotate()
+        return
+      }
+
+      // 새 토큰을 먼저 손에 쥔다. 아래 복사도, 이후의 '초대 링크 복사'도 이 값을 쓴다.
+      setRotatedToken(newToken)
+      // 링크를 무효로 만든 사람은 곧바로 새 링크를 공유해야 하므로 자동으로 복사해 준다.
+      // 복사에 실패하면 copyLink 가 주소를 노출해 직접 복사하게 한다.
+      await copyLink(newToken)
+      router.refresh()
+    } catch {
+      failRotate()
+    } finally {
+      // 나가기와 달리 이 화면은 그대로 남으므로 성공해도 버튼을 다시 살려 둔다.
+      setRotating(false)
+    }
+  }
+
+  function failRotate() {
+    setOpen(false) // 메뉴는 닫고 안내는 날짜 탭 아래 배너에 띄운다 (failLeave 와 같다)
+    // 메뉴가 사라지면서 포커스가 <body> 로 떨어지지 않도록 트리거로 되돌린다.
+    triggerRef.current?.focus()
+    onError(t('rotateInviteFailed'))
+  }
+
   return (
     <div ref={ref} className="relative shrink-0">
       <button
@@ -1165,6 +1252,18 @@ function HeaderMenu({
               />
             </div>
           )}
+          {isOwner && (
+            <button
+              onClick={rotateInvite}
+              disabled={rotating}
+              aria-busy={rotating}
+              role="menuitem"
+              /* 지금까지 뿌린 링크를 모두 끊는 동작이라 나가기와 같은 색으로 구분한다 */
+              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50"
+            >
+              {tNav('rotateInviteLink')}
+            </button>
+          )}
           <button
             onClick={toggleLocale}
             disabled={isPending}
@@ -1176,7 +1275,7 @@ function HeaderMenu({
           >
             {`🌐 ${nextLocaleName}`}
           </button>
-          {canLeave && (
+          {!isOwner && (
             <button
               onClick={leaveTrip}
               disabled={leaving}
