@@ -64,8 +64,12 @@ const GEO_MAX_AGE_MS = 60000
 // 자리에 뜬다. 메뉴 안이 아닌 이유 — 메뉴 안에 두면 결과를 남기기 위해 메뉴가 열려 있어야
 // 하고, 그 제약이 바깥 탭·Escape·트리거·언어 전환을 모두 잠그는 가드로 번진다.
 interface InviteNotice {
-  // 이미 로케일에 맞춰 옮긴 문구 (onError 로 올리는 값과 같은 결이다)
-  message: string
+  // 옮겨 둔 문구가 아니라 그 문구를 찾을 키다 (trip.view 아래의 키).
+  // 문구를 담아 두면 만들어진 시점의 언어로 굳는다 — 이 안내는 메뉴 밖에 있어 언어를 바꿔도
+  // 지워지지 않으므로, 화면이 통째로 새 언어가 되는데 이 한 줄만 옛 언어로 남는다.
+  // (주소가 있으면 그 옆 aria-label 은 새 언어라 한 안내 안에서 언어가 섞인다)
+  // 키로 들고 그릴 때마다 t() 로 옮기면 그 순간의 언어를 따라간다.
+  messageKey: 'rotateInviteCopied' | 'rotateInviteCopyManually' | 'copyLinkFailed'
   // 복사하지 못해 직접 복사하도록 노출하는 주소. 복사에 성공했으면 null
   url: string | null
   // 오류인가. 새로 만들기가 성공한 뒤라면 복사가 안 됐어도 오류가 아니다
@@ -720,7 +724,7 @@ export default function TripView({ trip, days: initialDays, userId }: Props) {
               role={inviteNotice.isError ? 'alert' : 'status'}
               className={`text-xs ${inviteNotice.isError ? 'text-red-600' : 'text-gray-500'}`}
             >
-              {inviteNotice.message}
+              {t(inviteNotice.messageKey)}
             </p>
             {inviteNotice.url && (
               <input
@@ -1039,6 +1043,14 @@ function HeaderMenu({
   const [isPending, startTransition] = useTransition()
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  // 지금 메뉴가 열려 있는가. closeMenu 가 포커스를 트리거로 되돌릴지 가르는 데 쓴다.
+  // closeMenu 안에서 open 을 그냥 읽으면 그 함수를 만든 렌더의 값이 잡히는데, 왕복이 끝난
+  // 뒤에 부르는 경로(복사 결과, 나가기·새로 만들기 실패)에서는 그 값이 왕복을 시작할 때의
+  // true 라 늘 참이 된다. 그래서 최신 값을 ref 로 따로 들고 본다.
+  const openRef = useRef(false)
+  useEffect(() => {
+    openRef.current = open
+  }, [open])
   // '복사됨' 표시를 1.5초 뒤 되돌리고 메뉴를 닫는 타이머. 보관해 두는 이유는 취소해야 하기
   // 때문이다 — 복사한 뒤 1.5초가 지나기 전에 메뉴를 닫았다 다시 열면, 남아 있던 타이머가
   // 방금 연 메뉴를 닫아 버린다.
@@ -1087,6 +1099,9 @@ function HeaderMenu({
   // 메뉴가 닫히면(언마운트 포함) 복사 타이머를 걷고 '복사됨' 표시도 되돌린다. 그 타이머가
   // 하는 일이 표시를 되돌리고 메뉴를 닫는 것뿐이라 이미 닫힌 뒤에는 남겨 둘 이유가 없고,
   // 남겨 두면 1.5초 안에 다시 연 메뉴를 그 타이머가 닫는다.
+  // 이 정리가 빠짐없이 걷어내는 것은 타이머를 거는 자리(아래 copyLink)가 메뉴가 열려 있을
+  // 때만 걸기 때문이다. 닫힌 뒤에 걸면 여기 등록해 둔 정리는 이미 실행된 뒤라 그 타이머만
+  // 홀로 살아남는다.
   useEffect(() => {
     if (!open) return
     return () => {
@@ -1176,9 +1191,16 @@ function HeaderMenu({
   // 결과를 메뉴 밖 공용 안내로 올릴 때도 함께 부른다. 열린 메뉴는 헤더 아래로 드리워져 날짜
   // 탭 아래 안내 자리를 덮으므로, 안내를 띄우면서 메뉴를 열어 두면 정작 읽어야 할 문구와
   // 주소를 가린다.
+  //
+  // 다만 이미 닫혀 있었다면 포커스는 건드리지 않는다. 왕복이 도는 동안 메뉴는 잠기지 않아
+  // 사용자가 먼저 닫고 다른 곳(장소 카드, 편집 모달 입력란)으로 옮겨 갈 수 있는데, 그 자리에
+  // 응답이 도착해 포커스를 ⋮ 로 끌어오면 사용자가 골라 둔 자리를 빼앗고 모바일에서는
+  // 키보드가 내려간다. 애초에 메뉴가 가져간 포커스가 없으니 되돌릴 것도 없다.
+  // 판정을 openRef 로 하는 이유는 그 선언 자리에 적어 두었다.
   function closeMenu() {
+    const wasOpen = openRef.current
     setOpen(false)
-    triggerRef.current?.focus()
+    if (wasOpen) triggerRef.current?.focus()
   }
 
   // 토큰을 받아 링크를 복사한다. 메뉴의 '초대 링크 복사'와 새로 만든 직후의 자동 복사가
@@ -1210,10 +1232,16 @@ function HeaderMenu({
         // 표시와 1.5초 뒤 닫기는 사용자가 직접 누른 복사 버튼 자리에서만 뜻이 있고,
         // 여기서는 그 버튼에 포커스도 없다(새로 만드는 동안 disabled 라 blur 되었다).
         if (afterRotate) {
-          onInviteNotice({ message: t('rotateInviteCopied'), url: null, isError: false })
+          onInviteNotice({ messageKey: 'rotateInviteCopied', url: null, isError: false })
           closeMenu()
           return
         }
+        // 복사를 누른 시점과 clipboard 응답 사이(수 ms)에 메뉴가 닫혔을 수 있다. 그러면
+        // 아래 둘 다 할 일이 없다 — '복사됨' 표시는 메뉴 안에 있어 보이지 않고, 그것을
+        // 되돌리고 메뉴를 닫는 타이머도 이미 닫힌 메뉴에는 할 일이 없다. 걸어 두면 오히려
+        // 해롭다: 위 정리 effect 는 메뉴가 열려 있는 동안만 걷을 채비를 하므로 이 타이머는
+        // 아무도 취소하지 못한 채 남아, 1.5초 안에 다시 연 메뉴를 그대로 닫아 버린다.
+        if (!openRef.current) return
         setCopied(true)
         // 앞선 복사가 남긴 타이머를 먼저 걷는다. 겹쳐 걸면 먼저 건 쪽을 취소할 길이 없어져
         // 뒤늦게 발화해 그때 열려 있던 메뉴를 닫는다.
@@ -1225,8 +1253,8 @@ function HeaderMenu({
           // 옮겼다면 그대로 둔다 (거기서 포커스를 빼앗는 쪽이 더 나쁘다).
           // 이 가드가 여기에만 붙는 이유 — 복사 버튼은 눌린 뒤에도 잠기지 않아 정상 경로에서
           // 포커스가 그대로 남고, 닫기까지 1.5초가 있어 그사이 옮겨 갔을 수 있다. 눌리는
-          // 순간 disabled 가 되는 버튼(새로 만들기·나가기)에서는 같은 가드가 늘 거짓이라
-          // closeMenu 는 두지 않는다.
+          // 순간 disabled 가 되는 버튼(새로 만들기·나가기)에서는 같은 가드가 늘 거짓이라,
+          // closeMenu 는 포커스 위치가 아니라 '메뉴가 열려 있었는가' 로 가른다.
           const focusWasInMenu = ref.current?.contains(document.activeElement) ?? false
           setOpen(false)
           if (focusWasInMenu) triggerRef.current?.focus()
@@ -1245,7 +1273,7 @@ function HeaderMenu({
   // 이 경로가 오히려 흔하다. 그때까지 붉은 오류로 띄우면 성공한 동작을 실패로 읽게 된다.
   function showManualCopy(url: string, afterRotate: boolean) {
     onInviteNotice({
-      message: afterRotate ? t('rotateInviteCopyManually') : t('copyLinkFailed'),
+      messageKey: afterRotate ? 'rotateInviteCopyManually' : 'copyLinkFailed',
       url,
       isError: !afterRotate,
     })
