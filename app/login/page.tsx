@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useTranslations } from 'next-intl'
 import LocaleSwitcher from '@/components/LocaleSwitcher'
-import { isInviteToken } from '@/lib/invite'
+import { normalizeInviteToken } from '@/lib/invite'
 
 function GoogleIcon() {
   return (
@@ -38,8 +38,11 @@ function SignInSection() {
 
   // 토큰을 실제로 실어 나르는 건 proxy 가 심은 httpOnly 쿠키다.
   // 여기서는 초대 수락을 기다리는 중이라는 안내를 띄우는 용도로만 쓴다.
-  const inviteParam = searchParams.get('invite')
-  const inviteToken = isInviteToken(inviteParam) ? inviteParam : null
+  //
+  // 쓰임이 안내 하나뿐이어도 값을 받는 이 자리에서 정규화한다. 초대 토큰은 들어오는 자리마다
+  // 한 번 맞춰 아래로는 늘 같은 모양이 흐르게 한다는 규칙이고(lib/invite.ts 참고),
+  // 한 곳만 빠져도 규칙이 아니게 된다.
+  const inviteToken = normalizeInviteToken(searchParams.get('invite'))
 
   async function signInWithGoogle() {
     setSignInFailed(false)

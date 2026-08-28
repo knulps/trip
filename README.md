@@ -25,7 +25,7 @@
 - **🗺️ Interactive Map** — Google Maps markers with route polylines, tap-to-focus place cards showing address, visit time, and notes. Tap any POI for a quick card with a Google Maps deep link.
 - **🚌 Directions** — Transit, taxi, and walking travel times shown simultaneously. Tap a mode to render the route polyline via the Routes API. Shows line names, stop counts, and transfer details. Geolocation-aware distances and a direct Google Maps directions link.
 - **📥 Google Takeout Import** — Import saved places from a Google Takeout CSV, distribute them across days interactively, auto-resolve coordinates via the Places API, and skip duplicates.
-- **🤝 Real-time Collaboration** — Google OAuth, shareable invite links, and live sync powered by Supabase Realtime. All itinerary changes propagate instantly to every member.
+- **🤝 Real-time Collaboration** — Google OAuth, shareable invite links, and live sync powered by Supabase Realtime. All itinerary changes propagate instantly to every member. The trip creator can reset the invite link at any time, which immediately invalidates every link shared so far.
 - **📱 Mobile / PWA** — Installable as a PWA (home screen, standalone mode). Handles safe areas (notch / Dynamic Island), `visualViewport` keyboard shifts, and skeleton loading screens.
 - **🌐 Korean / English** — The whole UI is localized with `next-intl`. A one-tap switcher writes a `NEXT_LOCALE` cookie and refreshes; Korean is the default.
 

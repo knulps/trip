@@ -19,6 +19,28 @@ export const INVITE_TOKEN_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // 쿼리와 쿠키에서 읽은 값은 전부 신뢰할 수 없으므로 이 helper로 걸러 쓴다
-export function isInviteToken(value: string | null | undefined): value is string {
+// export 하지 않는다. 값을 받는 자리에서 이 쪽을 집으면 정규화를 건너뛰게 되고,
+// 그것이 바로 아래 normalizeInviteToken 이 막으려는 실패 모양이다. 규칙을 주석이 아니라
+// 구조로 강제하려면 밖에서는 normalizeInviteToken 하나만 보여야 한다.
+function isInviteToken(value: string | null | undefined): value is string {
   return typeof value === 'string' && INVITE_TOKEN_PATTERN.test(value)
+}
+
+// 형식이 맞으면 소문자로 맞춰 돌려주고, 아니면 null.
+//
+// 왜 정규화가 필요한가 — 위 정규식은 /i 라 대소문자를 가리지 않고, Postgres 의 uuid 비교도
+// 그렇다. 그래서 /invite/A1B2C3D4-... 같은 주소로도 여행은 정상적으로 찾아진다. 그런데
+// Postgres 가 돌려주는 uuid 는 언제나 소문자라, 받은 값을 그대로 들고 있다가 조회 결과와
+// 문자열로 견주면 같은 토큰인데도 다르다고 판정한다. 초대 라우트의 수락 후 토큰 재확인이
+// 정확히 그 비교여서, 대문자 링크로 들어온 사람은 가입까지 된 뒤 그 멤버십이 되돌려졌다.
+//
+// 왜 비교를 대소문자 무시로 바꾸지 않고 값을 정규화하는가 — 이 토큰은 URL, 쿠키,
+// 리다이렉트 주소를 거쳐 여러 경로로 흐르고, 비교하는 자리는 앞으로 늘 수 있다. 비교마다
+// 대소문자를 챙기는 규칙은 한 곳만 빠져도 같은 결함이 되살아나므로, 값이 들어오는 자리에서
+// 한 번 맞춰 아래로는 언제나 같은 모양이 흐르게 한다.
+// (toLowerCase 는 로케일을 타지 않는다 — 위 정규식을 통과한 값은 [0-9a-f-] 뿐이다)
+export function normalizeInviteToken(
+  value: string | null | undefined
+): string | null {
+  return isInviteToken(value) ? value.toLowerCase() : null
 }
